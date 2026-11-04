@@ -361,6 +361,7 @@ integrations:
   invidious:
     enabled: true
     default_url: "https://invidious.example.com"
+    # open_url: "https://www.youtube.com"      # optional: open videos there instead of on the Invidious server
 
 # ── Wallpapers ──────────────────────────────────────────────
 wallpapers:

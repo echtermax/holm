@@ -56,6 +56,24 @@ test('videos map to tiles that open on the instance', async () => {
 	assert.equal(more, 'https://inv.example.com/search?q=interstellar');
 });
 
+test('open_url sends videos and "More" elsewhere, search still goes to the instance', async () => {
+	const { fetch, calls } = fakeFetch(videos);
+	const { results, more } = await invidious.searchProviders.videos.query({
+		config: { ...config, openUrl: 'https://www.youtube.com/' }, query: 'interstellar', limit: 24, fetch
+	});
+	assert.ok(calls[0].startsWith('https://inv.example.com/api/v1/search?'));
+	assert.equal(results[0].href, 'https://www.youtube.com/watch?v=2LqzF5WauAw');
+	assert.equal(results[0].thumbnail, '/api/integrations/invidious/proxy/thumb/2LqzF5WauAw');
+	assert.equal(more, 'https://www.youtube.com/results?search_query=interstellar');
+
+	const other = await invidious.searchProviders.videos.query({ config: { ...config, openUrl: 'https://watch.example.org' }, query: 'interstellar', limit: 24, fetch });
+	assert.equal(other.results[0].href, 'https://watch.example.org/watch?v=2LqzF5WauAw');
+	assert.equal(other.more, 'https://watch.example.org/search?q=interstellar');
+
+	const bad = await invidious.searchProviders.videos.query({ config: { ...config, openUrl: 'javascript:alert(1)' }, query: 'interstellar', limit: 24, fetch });
+	assert.equal(bad.results[0].href, 'https://inv.example.com/watch?v=2LqzF5WauAw');
+});
+
 test('a bot-check page or an error status counts as down', async () => {
 	const html = fakeFetch('<!doctype html><title>Verifying your browser…</title>', { headers: { 'content-type': 'text/html' } });
 	await assert.rejects(search(html.fetch));

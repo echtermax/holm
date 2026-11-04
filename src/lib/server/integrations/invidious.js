@@ -7,6 +7,9 @@
 // every user searches it, with nothing to connect. Search needs no account,
 // so Holm sends no credentials. Thumbnails go through Holm's proxy, so the
 // browser only ever talks to Holm.
+//
+// Videos open on the instance, or on `open_url` when the operator sets one
+// (e.g. https://www.youtube.com): search through Invidious, watch elsewhere.
 
 // Tiles render 208 CSS px wide; the 320x180 "mqdefault" frame is 16:9 and
 // sharp enough at that size.
@@ -25,11 +28,12 @@ const adapter = {
 	shared: true,
 
 	configSchema: [
-		{ key: 'url', type: 'url', label: 'Invidious URL', required: true, fromOperatorDefault: 'default_url' }
+		{ key: 'url', type: 'url', label: 'Invidious URL', required: true, fromOperatorDefault: 'default_url' },
+		{ key: 'openUrl', type: 'url', label: 'Open videos on', fromOperatorDefault: 'open_url' }
 	],
 
 	async test({ config, fetch }) {
-		const base = baseUrl(config);
+		const base = baseUrl(config?.url);
 		if (!base) return { ok: false, message: 'Set integrations.invidious.default_url in config.yml' };
 		try {
 			await search(base, 'test', fetch);
@@ -45,13 +49,14 @@ const adapter = {
 			mode: 'inline',
 			kind: 'video',
 			layout: 'video',
-			failMessage: (config) => unreachable(baseUrl(config) || 'the Invidious server'),
+			failMessage: (config) => unreachable(baseUrl(config?.url) || 'the Invidious server'),
 			async query({ config, query, limit, fetch }) {
-				const base = baseUrl(config);
+				const base = baseUrl(config?.url);
 				const trimmed = (query || '').trim();
 				if (!base || !trimmed) return { results: [] };
 
 				const videos = await search(base, trimmed, fetch);
+				const open = baseUrl(config.openUrl) || base;
 				return {
 					results: videos
 						.filter((v) => v?.type === 'video' && VIDEO_ID.test(v.videoId || ''))
@@ -61,14 +66,14 @@ const adapter = {
 							title: v.title || 'Untitled',
 							subtitle: v.author || '',
 							thumbnail: `/api/integrations/invidious/proxy/thumb/${v.videoId}`,
-							href: `${base}/watch?v=${v.videoId}`,
+							href: `${open}/watch?v=${v.videoId}`,
 							meta: {
 								kind: 'video',
 								duration: v.liveNow ? 'LIVE' : formatLength(v.lengthSeconds),
 								info: [v.viewCountText, v.publishedText].filter(Boolean).join(' · ')
 							}
 						})),
-					more: `${base}/search?${new URLSearchParams({ q: trimmed })}`
+					more: moreUrl(open, trimmed)
 				};
 			}
 		}
@@ -78,7 +83,7 @@ const adapter = {
 		thumb: {
 			defaultCacheControl: 'private, max-age=86400',
 			async fetch({ config, params, fetch }) {
-				const base = baseUrl(config);
+				const base = baseUrl(config?.url);
 				const id = params.path?.[0];
 				if (!base || !id || !VIDEO_ID.test(id)) {
 					return new Response('Invalid video id', { status: 400 });
@@ -91,10 +96,10 @@ const adapter = {
 	widgets: {}
 };
 
-// The operator's URL, without a trailing slash; null unless it is http(s).
-function baseUrl(config) {
+// An operator URL, without a trailing slash; null unless it is http(s).
+function baseUrl(value) {
 	try {
-		const url = new URL(config?.url || '');
+		const url = new URL(value || '');
 		if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
 		return url.href.replace(/\/+$/, '');
 	} catch {
@@ -114,6 +119,15 @@ async function search(base, q, fetch) {
 	const data = await res.json();
 	if (!Array.isArray(data)) throw new Error('Invidious sent an unexpected reply');
 	return data;
+}
+
+// The full results page for the query: YouTube calls it /results, Invidious
+// /search. Both take /watch?v= for a video.
+function moreUrl(open, q) {
+	const host = new URL(open).hostname;
+	return host === 'youtube.com' || host.endsWith('.youtube.com')
+		? `${open}/results?${new URLSearchParams({ search_query: q })}`
+		: `${open}/search?${new URLSearchParams({ q })}`;
 }
 
 function unreachable(base) {

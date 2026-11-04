@@ -58,7 +58,10 @@ The key (`immich`) must match the adapter id. If an app in `apps:` has the same 
 integrations:
   invidious:
     default_url: "https://invidious.example.com"
+    open_url: "https://www.youtube.com"   # optional
 ```
+
+Videos open on the Invidious server, unless `open_url` is set. Then a video opens at `<open_url>/watch?v=<id>`, and "More" opens that site's results page, while search and thumbnails still go through Invidious.
 
 Public Invidious servers come and go, and many turn their API off or answer with a browser check, which Holm reports as "Couldn’t reach <host>". Check that `<default_url>/api/v1/search?q=test&type=video` returns JSON, or run your own.
 
