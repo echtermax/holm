@@ -1,0 +1,211 @@
+// GitHub integration adapter.
+//
+// Surfaces:
+//   - searchProviders.repos  — the repos the user's token can see, by name
+//                              and description
+//   - searchProviders.issues — issues and PRs the user is involved in
+//
+// Each user connects with their own read-only fine-grained token. Repos come
+// from /user/repos, cached per token and filtered locally, so they cost no
+// search requests. Issues and PRs need the search API, which allows only 30
+// requests a minute per user: the search bar asks it only once typing stops
+// (`delay`), answers repeat queries from a short cache, and stops asking
+// until the limit resets once GitHub says it is used up.
+
+const API = 'https://api.github.com';
+const WEB = 'https://github.com';
+
+const repoCache = new Map(); // token → { login, repos, expiresAt }
+const REPO_CACHE_TTL_MS = 5 * 60_000; // 5 minutes
+const MAX_REPO_PAGES = 3; // 300 repos, most recently pushed first
+
+const issueCache = new Map(); // token + query → { results, expiresAt }
+const ISSUE_CACHE_TTL_MS = 60_000;
+const MAX_ISSUE_CACHE_ENTRIES = 200;
+
+const searchBlockedUntil = new Map(); // token → ms since the epoch
+
+// One repo crawl per token at a time: keystrokes that arrive while the cache
+// is cold join the crawl already running.
+const inFlight = new Map();
+
+/** @type {import('./_types.js').IntegrationAdapter} */
+const adapter = {
+	id: 'github',
+	name: 'GitHub',
+	icon: 'di:github',
+	shortcut: 'gh',
+	description: 'Your repositories, issues and pull requests',
+
+	configSchema: [
+		{
+			key: 'apiKey',
+			type: 'secret',
+			label: 'Fine-grained token',
+			required: true,
+			help: '1. Open [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)\n2. Pick an expiry, and under **Repository access** choose **All repositories**\n3. Under **Permissions**, set **Issues** and **Pull requests** to **Read-only**\n4. Generate the token and copy it'
+		}
+	],
+
+	async test({ config, fetch }) {
+		if (!config?.apiKey) {
+			return { ok: false, message: 'A token is required' };
+		}
+		try {
+			const res = await fetch(`${API}/user`, { method: 'GET', headers: authHeaders(config) });
+			if (!res.ok) {
+				if (res.status === 401) {
+					return { ok: false, message: 'Token rejected — check that it is valid and not expired' };
+				}
+				return { ok: false, message: `GitHub returned ${res.status} ${res.statusText}` };
+			}
+			const login = (await res.json())?.login;
+			return { ok: true, message: login ? `Connected as ${login}` : 'Connected' };
+		} catch (err) {
+			return { ok: false, message: `Connection failed: ${err.message}` };
+		}
+	},
+
+	searchProviders: {
+		repos: {
+			label: 'Repositories',
+			mode: 'inline',
+			async query({ config, query, limit, fetch }) {
+				if (!config?.apiKey) return { results: [] };
+				const trimmed = (query || '').trim().toLowerCase();
+				if (!trimmed) return { results: [] };
+
+				const { repos } = await loadRepos(config, fetch);
+				const matches = repos
+					.filter((r) => r.full_name.toLowerCase().includes(trimmed) || r.description?.toLowerCase().includes(trimmed))
+					.slice(0, Math.min(limit || 10, 25));
+
+				return {
+					results: matches.map((r) => ({
+						id: String(r.id),
+						title: r.full_name,
+						subtitle: [r.description, r.language, r.stargazers_count ? `★ ${r.stargazers_count}` : '']
+							.filter(Boolean)
+							.join(' · ')
+							.slice(0, 120),
+						href: r.html_url,
+						meta: { kind: 'collection', status: r.private ? 'Private' : r.archived ? 'Archived' : '' }
+					})),
+					more: `${WEB}/search?${new URLSearchParams({ q: query.trim(), type: 'repositories' })}`
+				};
+			}
+		},
+		issues: {
+			label: 'Issues & pull requests',
+			mode: 'inline',
+			delay: 700,
+			async query({ config, query, limit, fetch }) {
+				if (!config?.apiKey) return { results: [] };
+				const trimmed = (query || '').trim();
+				if (!trimmed) return { results: [] };
+
+				const q = `${trimmed} involves:@me`;
+				const more = `${WEB}/search?${new URLSearchParams({ q, type: 'issues' })}`;
+				const max = Math.min(limit || 10, 25);
+				const cacheKey = `${config.apiKey}\n${max}\n${trimmed.toLowerCase()}`;
+				const cached = issueCache.get(cacheKey);
+				if (cached && Date.now() < cached.expiresAt) return { results: cached.results, more };
+
+				const blockedUntil = searchBlockedUntil.get(config.apiKey) || 0;
+				if (Date.now() < blockedUntil) throw limitError(blockedUntil);
+
+				const params = new URLSearchParams({ q, per_page: String(max) });
+				const res = await fetch(`${API}/search/issues?${params}`, { method: 'GET', headers: authHeaders(config) });
+				noteSearchLimit(config.apiKey, res);
+				if (!res.ok) {
+					if ((res.status === 403 || res.status === 429) && searchBlockedUntil.has(config.apiKey)) {
+						throw limitError(searchBlockedUntil.get(config.apiKey));
+					}
+					throw new Error(`GitHub search failed: ${res.status}`);
+				}
+				const items = (await res.json())?.items || [];
+				const results = items.slice(0, max).map((it) => {
+					const repo = it.repository_url?.replace(`${API}/repos/`, '') || '';
+					const pr = it.pull_request;
+					const status = pr?.merged_at ? 'Merged' : it.state === 'closed' ? 'Closed' : 'Open';
+					return {
+						id: String(it.id),
+						title: it.title,
+						subtitle: [`${repo}#${it.number}`, pr ? 'Pull request' : 'Issue', `updated ${shortDate(it.updated_at)}`].join(' · '),
+						href: it.html_url,
+						meta: { kind: 'card', status }
+					};
+				});
+
+				if (issueCache.size >= MAX_ISSUE_CACHE_ENTRIES) issueCache.delete(issueCache.keys().next().value);
+				issueCache.set(cacheKey, { results, expiresAt: Date.now() + ISSUE_CACHE_TTL_MS });
+				return { results, more };
+			}
+		}
+	},
+
+	widgets: {}
+};
+
+function loadRepos(config, fetch) {
+	const cached = repoCache.get(config.apiKey);
+	if (cached && Date.now() < cached.expiresAt) return Promise.resolve(cached);
+	let pending = inFlight.get(config.apiKey);
+	if (!pending) {
+		pending = fetchRepos(config, fetch)
+			.then((repos) => {
+				const entry = { repos, expiresAt: Date.now() + REPO_CACHE_TTL_MS };
+				repoCache.set(config.apiKey, entry);
+				return entry;
+			})
+			.finally(() => inFlight.delete(config.apiKey));
+		inFlight.set(config.apiKey, pending);
+	}
+	return pending;
+}
+
+async function fetchRepos(config, fetch) {
+	const repos = [];
+	let url = `${API}/user/repos?per_page=100&sort=pushed`;
+	for (let page = 0; url && page < MAX_REPO_PAGES; page++) {
+		const res = await fetch(url, { method: 'GET', headers: authHeaders(config) });
+		if (!res.ok) throw new Error(`GitHub repos failed: ${res.status}`);
+		repos.push(...((await res.json()) || []));
+		url = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') || '')?.[1] || null;
+	}
+	return repos;
+}
+
+// When GitHub reports the search budget spent, no more searches go out for
+// this token until it resets.
+function noteSearchLimit(token, res) {
+	const remaining = res.headers.get('x-ratelimit-remaining');
+	const reset = Number(res.headers.get('x-ratelimit-reset'));
+	const retryAfter = Number(res.headers.get('retry-after'));
+	if (retryAfter > 0) {
+		searchBlockedUntil.set(token, Date.now() + retryAfter * 1000);
+	} else if (remaining === '0' && reset > 0) {
+		searchBlockedUntil.set(token, reset * 1000);
+	} else {
+		searchBlockedUntil.delete(token);
+	}
+}
+
+function limitError(until) {
+	return new Error(`GitHub search limit reached, try again in ${Math.max(1, Math.ceil((until - Date.now()) / 1000))} s`);
+}
+
+function shortDate(iso) {
+	const d = new Date(iso);
+	return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function authHeaders(config) {
+	return {
+		Authorization: `Bearer ${config.apiKey}`,
+		accept: 'application/vnd.github+json',
+		'x-github-api-version': '2022-11-28'
+	};
+}
+
+export default adapter;

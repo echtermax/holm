@@ -63,6 +63,7 @@
  * @property {'poster'|'tracks'|'grid'|'video'|'list'} [layout]  Overrides the layout picked from kind: media = poster, photo = grid, else list. video = 16:9 tiles with `meta.duration` on the art and `meta.info` under the title
  * @property {'video'} [shelf]                Movies and shows from every provider with shelf 'video' share one "Movies & TV" row
  * @property {boolean} [scoped]                Asked only once the user has scoped the bar to this app (`!<shortcut>`): sections such as Tags or Lists that would crowd an everyday search
+ * @property {number} [delay]                  Ms after the last keystroke before this provider is asked, for an API with a tight rate limit; never less than the bar's 250 ms
  * @property {boolean} [filters]               Searches inside a picked `filter`: it receives `filter`, and is the only kind of provider asked while one is picked
  * @property {(config: object) => string} [failMessage]  Shown instead of "Search failed: …" when the query throws or times out (Invidious: "Couldn’t reach <host>…")
  * @property {(ctx: AdapterContext & { query: string, limit: number, filter?: object }) => Promise<{ results: SearchResultItem[], more?: string }>} query

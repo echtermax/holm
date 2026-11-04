@@ -100,6 +100,7 @@
 					shelf: prov.shelf,
 					scoped: prov.scoped,
 					filters: prov.filters,
+					delay: prov.delay,
 					// Navidrome's player widget: songs play in Holm instead of opening.
 					player: it.userState?.surfaces?.widgets === true && (it.availableSurfaces || []).includes('widgets'),
 					// The Calendar's CalDAV URL is no page to browse; its web address is.
@@ -188,14 +189,15 @@
 	// providers in the future render as separate sections in the dropdown.
 	let providerResults = $state({}); // providerId → { results, loading, error }
 	let inlineOpen = $state(false);
-	let debounceTimer = null;
+	let debounceTimers = [];
 	let lastDispatched = '';
 	let searchAbort = null;
 
 	// Drop any pending or in-flight provider search so a slower, older
 	// response can't land under a newer query.
 	function cancelSearch() {
-		clearTimeout(debounceTimer);
+		for (const timer of debounceTimers) clearTimeout(timer);
+		debounceTimers = [];
 		searchAbort?.abort();
 		searchAbort = null;
 		lastDispatched = '';
@@ -286,6 +288,10 @@
 	// we still don't want a Planka cards fetch on "p".
 	const MIN_REMOTE_QUERY_LENGTH = 3;
 
+	// A provider is asked this long after the last keystroke, or later if it
+	// sets its own `delay` (GitHub's search allows 30 requests a minute).
+	const SEARCH_DELAY_MS = 250;
+
 	// Inside a picked filter an empty query lists what's in it.
 	function dispatchSearch(q, providers, filter) {
 		cancelSearch();
@@ -294,14 +300,14 @@
 			providerResults = {};
 			return;
 		}
-		debounceTimer = setTimeout(() => {
-			const key = filter ? `${JSON.stringify(filter.params)}\n${trimmed}` : trimmed;
-			lastDispatched = key;
-			searchAbort = new AbortController();
-			for (const provider of providers) {
-				fireOneProvider(provider, trimmed, searchAbort.signal, key, filter);
-			}
-		}, 250);
+		const key = filter ? `${JSON.stringify(filter.params)}\n${trimmed}` : trimmed;
+		lastDispatched = key;
+		const abort = (searchAbort = new AbortController());
+		for (const provider of providers) {
+			debounceTimers.push(setTimeout(() => {
+				fireOneProvider(provider, trimmed, abort.signal, key, filter);
+			}, Math.max(provider.delay || 0, SEARCH_DELAY_MS)));
+		}
 	}
 
 	$effect(() => {

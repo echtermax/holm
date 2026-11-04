@@ -35,7 +35,7 @@ export function adapterToClient(adapter, { icon, name, tip, shortcut } = {}) {
 		searchProviders: Object.fromEntries(
 			Object.entries(adapter.searchProviders || {}).map(([key, p]) => [
 				key,
-				{ label: p.label, mode: p.mode, kind: p.kind || null, layout: p.layout || null, shelf: p.shelf || null, scoped: !!p.scoped, filters: !!p.filters }
+				{ label: p.label, mode: p.mode, kind: p.kind || null, layout: p.layout || null, shelf: p.shelf || null, scoped: !!p.scoped, filters: !!p.filters, delay: p.delay || 0 }
 			])
 		),
 		widgets: Object.entries(adapter.widgets || {}).map(([key, w]) => ({

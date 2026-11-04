@@ -193,7 +193,7 @@ search:
 # Pluggable third-party app adapters. Shipped adapters: Immich, Paperless,
 # Nextcloud, Planka, Karakeep, Linkwarden, Jellyfin, Plex, Navidrome,
 # Audiobookshelf, Mealie, Seerr, Calendar (CalDAV), Miniflux, Komga, Kavita,
-# Papra, Thingport, Memos, Plane. Add more in
+# Papra, Thingport, Memos, Plane, GitHub. Add more in
 # src/lib/server/integrations/.
 #
 # Each key must match the adapter's `id`. If an app in the section above has
@@ -371,6 +371,12 @@ integrations:
     default_url: "https://plane.example.com"
     # default_workspace: "my-workspace"       # Pins the workspace slug for every user
     # cache_ttl: 300                          # Seconds project names are cached per user (default 300)
+    surfaces:
+      search: true
+      widgets: false
+  github:
+    enabled: true
+    name: "GitHub"
     surfaces:
       search: true
       widgets: false
