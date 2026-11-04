@@ -10,10 +10,6 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   # A push to dev publishes an alpha only when it came from a PR into dev whose
   # title contains [release]; anything else ends here, green. No secrets in this
@@ -56,6 +52,11 @@ jobs:
     needs: alpha-gate
     # always(): a tag push skips the gate, and a skipped need would skip this job too.
     if: always() && (github.ref_type == 'tag' || needs.alpha-gate.outputs.publish == 'true')
+    # On the job, not the workflow: only real alphas queue here, so a plain dev
+    # push can never replace a pending [release] run. Serializes the N counter.
+    concurrency:
+      group: holm-alpha
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -172,6 +173,9 @@ jobs:
   prod:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: holm-prod
+      cancel-in-progress: false
     permissions:
       contents: write
       packages: write
