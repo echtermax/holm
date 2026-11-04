@@ -1,6 +1,7 @@
 <script>
 	import '../app.css';
 	import { setContext } from 'svelte';
+	import { themeBackgroundCss } from '$lib/themeBackground.js';
 	let { children, data } = $props();
 
 	const config = data.config;
@@ -14,6 +15,8 @@
 	const fontFamily = config?.branding?.font?.family || 'JetBrains Mono';
 	// JetBrains Mono ships in the bundle (app.css); a url is only needed for a custom font.
 	const fontUrl = config?.branding?.font?.url || null;
+	// The household's Dark and Light page colours, checked when config.yml loads.
+	const backgroundCss = themeBackgroundCss(config?.branding);
 </script>
 
 <svelte:head>
@@ -30,7 +33,7 @@
 	{#if fontUrl}
 		<link href={fontUrl} rel="stylesheet">
 	{/if}
-	{@html `<style>:root { --font-family: '${fontFamily}', monospace; --accent: ${accentColor}; } body { font-family: var(--font-family); }</style>`}
+	{@html `<style>:root { --font-family: '${fontFamily}', monospace; --accent: ${accentColor}; } body { font-family: var(--font-family); } ${backgroundCss}</style>`}
 </svelte:head>
 
 <div class="pwa-top-strip" aria-hidden="true"></div>

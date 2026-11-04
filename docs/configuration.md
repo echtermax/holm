@@ -426,6 +426,7 @@ Every key Holm reads. "Reload" means a save takes effect without a restart.
 | `branding.font.family` / `font.url` | string / URL | `JetBrains Mono` / none | yes | The default font is bundled; a URL is only for another font |
 | `branding.theme_color` | hex | `#09090b` | yes | PWA theme color |
 | `branding.accent_color` | hex | `#f5b942` | yes | Focus rings, selected states, hover halos |
+| `branding.background.dark` / `background.light` | `#rrggbb` | `#09090b` / `#ffffff` | yes | Page colour on the Dark and Light themes; Dynamic without a wallpaper uses `dark`. Rejected unless the theme's dim text reaches 4.5:1 on it |
 | `branding.show_footer` | bool | `true` | yes | Footer with the brand name and register / privacy links |
 | `auth.enabled` | bool | `false` | yes | `false` = every visitor is the same Guest with no groups |
 | `auth.oidc.issuer` / `client_id` / `client_secret` / `scopes` / `redirect_base` | string | none (`scopes`: `openid profile`) | restart | Endpoints are discovered from the issuer |

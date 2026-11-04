@@ -9,6 +9,7 @@ import { latestRelease, updateFor } from './updateCheck.js';
 import { substituteEnvVars } from './envVars.js';
 import { searchOnFocusError } from '../searchOnFocus.js';
 import { searchLookError } from '../searchLook.js';
+import { themeBackgroundError } from '../themeBackground.js';
 import { wallpapersError, wallpaperCount, wallpaperVersion, hasResizer } from './wallpapers.js';
 import { healthError, healthSource, appHealth } from './health/config.js';
 
@@ -46,7 +47,7 @@ function loadConfig() {
 		throw new Error(`${configPath} must be a YAML mapping of settings`);
 	}
 	const config = substituteEnvVars(parsed);
-	const invalid = searchOnFocusError(config.search) || searchLookError(config.search) || wallpapersError(config.wallpapers) || healthError(config, flatApps(config.apps));
+	const invalid = searchOnFocusError(config.search) || searchLookError(config.search) || themeBackgroundError(config.branding) || wallpapersError(config.wallpapers) || healthError(config, flatApps(config.apps));
 	if (invalid) throw new Error(`Invalid setting in ${configPath}: ${invalid}`);
 	_config = config;
 	return _config;

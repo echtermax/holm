@@ -17,6 +17,9 @@ branding:
     url: null                                 # JetBrains Mono is bundled; a stylesheet URL is only needed for another font
   theme_color: "#09090b"                      # PWA theme color and meta tag
   accent_color: "#f5b942"                     # Interactive accent: focus rings, selected states, hover halos
+  background:                                 # Page colour per theme; leave a key out to keep the default
+    dark: "#000000"                           # Default #09090b; #000000 is true black for OLED screens
+    light: "#faf6ee"                          # Default #ffffff; this is a warm white
   show_footer: true                           # false = hide the dashboard footer (brand name + register/privacy links)
 
 # ── Authentication ───────────────────────────────────────────

@@ -425,16 +425,16 @@ html[data-glass='solid'] {
 	--glass-menu-bg: rgba(9, 9, 11, 0.75);
 }
 html[data-glass='solid'] body.theme-dark {
-	--glass-bg: #09090b;
-	--glass-menu-bg: #09090b;
+	--glass-bg: var(--bg);
+	--glass-menu-bg: var(--bg);
 }
 html[data-glass='clear'] body.theme-light {
 	--glass-bg: transparent;
 	--glass-menu-bg: rgba(255, 255, 255, 0.5);
 }
 html[data-glass='solid'] body.theme-light {
-	--glass-bg: #ffffff;
-	--glass-menu-bg: #ffffff;
+	--glass-bg: var(--bg);
+	--glass-menu-bg: var(--bg);
 }
 .glass-card {
 	background: var(--glass-bg);
