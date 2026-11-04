@@ -125,7 +125,7 @@ What Holm deliberately leaves out: server stats, container health, uptime widget
 | Thingport | 3D models; under `!tp`, collections and tags too |
 | Memos | Your own memos, opened in full with live checklists (Memos 0.26 or later) |
 | Plane | Work items, by title or ID, opened with state, assignees and description |
-| GitHub | Your repos, plus issues and PRs you're involved in |
+| GitHub | Your repos, plus issues and PRs you're involved in (one owner's repos per token, plus public ones) |
 | Invidious | YouTube videos, from the Invidious server set in `config.yml`; no sign-in |
 
 **App health** is a health check built into each app tile, supporting Kener, Uptime Kuma, Gatus and Cachet, or a plain URL check; see [App health](docs/configuration.md#app-health).

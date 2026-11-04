@@ -29,7 +29,7 @@ Holm has two kinds of app support.
 | Thingport | 3D models; under `!tp`, collections and tags too; "More" opens Thingport's results page | URL + API token | `!tp` |
 | Memos | The user's own memos (full text), with tags, date and checklist progress; a memo opens in full, and its checklist boxes tick from Holm | URL + access token (Memos 0.26 or later, 26.10's `/api` included) | `!memo` |
 | Plane | Work items, by title or ID (`WEB-42`), across the workspace's projects; a work item opens with its state, priority, assignees, labels, due date and description | URL + workspace + API key (Plane 1.1 or later) | `!plane` |
-| GitHub | The user's repos (name, description), plus issues and PRs they're involved in; issues are searched once typing pauses, since GitHub allows 30 searches a minute | Read-only fine-grained token | `!gh` |
+| GitHub | The user's repos (name, description), plus issues and PRs they're involved in; issues are searched once typing pauses, since GitHub allows 30 searches a minute | Read-only fine-grained token. A token covers one owner's repos (the user or one org) plus all public repos, so private repos of other owners don't show | `!gh` |
 | Invidious | YouTube videos, in a row of 16:9 tiles under the posters; Enter opens the video on the Invidious server | Nothing: shared, set by the operator | `!yt` |
 
 Integrations are marked Alpha in the UI. The widgets so far are Navidrome's player and the Calendar's reminders and upcoming events.

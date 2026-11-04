@@ -5,7 +5,9 @@
 //                              and description
 //   - searchProviders.issues — issues and PRs the user is involved in
 //
-// Each user connects with their own read-only fine-grained token. Repos come
+// Each user connects with their own read-only fine-grained token. Such a
+// token covers the repos of one owner (the user, or an org they pick), plus
+// every public repo; private repos of other owners never show. Repos come
 // from /user/repos, cached per token and filtered locally, so they cost no
 // search requests. Issues and PRs need the search API, which allows only 30
 // requests a minute per user: the search bar asks it only once typing stops
@@ -43,7 +45,7 @@ const adapter = {
 			type: 'secret',
 			label: 'Fine-grained token',
 			required: true,
-			help: '1. Open [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)\n2. Pick an expiry, and under **Repository access** choose **All repositories**\n3. Under **Permissions**, set **Issues** and **Pull requests** to **Read-only**\n4. Generate the token and copy it'
+			help: '1. Open [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)\n2. Pick an expiry. Under **Resource owner** keep yourself, or pick an org to search its repos instead; under **Repository access** choose **All repositories**\n3. Under **Permissions**, set **Issues** and **Pull requests** to **Read-only**\n4. Generate the token and copy it'
 		}
 	],
 
@@ -75,7 +77,7 @@ const adapter = {
 				const trimmed = (query || '').trim().toLowerCase();
 				if (!trimmed) return { results: [] };
 
-				const { repos } = await loadRepos(config, fetch);
+				const { login, repos } = await loadRepos(config, fetch);
 				const matches = repos
 					.filter((r) => r.full_name.toLowerCase().includes(trimmed) || r.description?.toLowerCase().includes(trimmed))
 					.slice(0, Math.min(limit || 10, 25));
@@ -91,7 +93,7 @@ const adapter = {
 						href: r.html_url,
 						meta: { kind: 'collection', status: r.private ? 'Private' : r.archived ? 'Archived' : '' }
 					})),
-					more: `${WEB}/search?${new URLSearchParams({ q: query.trim(), type: 'repositories' })}`
+					more: login ? `${WEB}/${encodeURIComponent(login)}?${new URLSearchParams({ tab: 'repositories', q: query.trim() })}` : undefined
 				};
 			}
 		},
@@ -114,7 +116,13 @@ const adapter = {
 				const blockedUntil = searchBlockedUntil.get(config.apiKey) || 0;
 				if (Date.now() < blockedUntil) throw limitError(blockedUntil);
 
-				const params = new URLSearchParams({ q, per_page: String(max) });
+				// Fine-grained tokens get a 422 unless the query names issues or PRs,
+				// and only advanced search takes the OR.
+				const params = new URLSearchParams({
+					q: `${q} (is:issue OR is:pull-request)`,
+					advanced_search: 'true',
+					per_page: String(max)
+				});
 				const res = await fetch(`${API}/search/issues?${params}`, { method: 'GET', headers: authHeaders(config) });
 				noteSearchLimit(config.apiKey, res);
 				if (!res.ok) {
@@ -153,8 +161,8 @@ function loadRepos(config, fetch) {
 	let pending = inFlight.get(config.apiKey);
 	if (!pending) {
 		pending = fetchRepos(config, fetch)
-			.then((repos) => {
-				const entry = { repos, expiresAt: Date.now() + REPO_CACHE_TTL_MS };
+			.then(({ login, repos }) => {
+				const entry = { login, repos, expiresAt: Date.now() + REPO_CACHE_TTL_MS };
 				repoCache.set(config.apiKey, entry);
 				return entry;
 			})
@@ -165,6 +173,9 @@ function loadRepos(config, fetch) {
 }
 
 async function fetchRepos(config, fetch) {
+	const me = await fetch(`${API}/user`, { method: 'GET', headers: authHeaders(config) });
+	if (!me.ok) throw new Error(`GitHub user failed: ${me.status}`);
+	const login = (await me.json())?.login || '';
 	const repos = [];
 	let url = `${API}/user/repos?per_page=100&sort=pushed`;
 	for (let page = 0; url && page < MAX_REPO_PAGES; page++) {
@@ -173,7 +184,7 @@ async function fetchRepos(config, fetch) {
 		repos.push(...((await res.json()) || []));
 		url = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') || '')?.[1] || null;
 	}
-	return repos;
+	return { login, repos };
 }
 
 // When GitHub reports the search budget spent, no more searches go out for
