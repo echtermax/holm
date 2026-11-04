@@ -110,7 +110,7 @@ What Holm deliberately leaves out: server stats, container health, uptime widget
 | Nextcloud | Files |
 | Jellyfin | Movies, shows and music (Quick Connect sign-in) |
 | Plex | Movies, shows and music (sign-in at plex.tv/link) |
-| Navidrome | Artists, albums and songs, with an optional player for songs |
+| Navidrome | Artists, albums, playlists and songs, with an optional player for songs, albums and playlists |
 | Audiobookshelf | Audiobooks and podcasts |
 | Mealie | Recipes |
 | Seerr | Movies and shows: play or request (signs in through Jellyfin or Plex) |

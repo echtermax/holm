@@ -2,7 +2,7 @@
 	import { onMount, getContext, untrack, tick } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { integrations as integrationsStore } from '$lib/stores/integrations.js';
-	import { nowPlaying } from '$lib/stores/player.js';
+	import { playTrack as startTrack, playQueue } from '$lib/stores/player.js';
 	import { prefs } from '$lib/stores/prefs.js';
 	import { resolveIcon } from '$lib/apps.js';
 	import SearchResults from './SearchResults.svelte';
@@ -408,16 +408,42 @@
 		};
 	}
 
-	// A fresh object each time, so picking the playing song again restarts it.
 	function playTrack(track) {
-		nowPlaying.set({ ...track });
+		startTrack(track);
 		finish();
 	}
 
+	// An album or playlist: fetch its tracks, then play from the first. The
+	// list stays open while they load, and the badge reports a failure.
+	async function playTracks(key, p, r) {
+		if (actionState[key]?.busy) return;
+		actionState = { ...actionState, [key]: { busy: true } };
+		try {
+			const tracks = await integrationsStore.queue(p.integrationId, r.meta.queue);
+			if (!tracks.length) throw new Error('Nothing to play');
+			const cleared = { ...actionState };
+			delete cleared[key];
+			actionState = cleared;
+			playQueue(r.meta.queue.type, tracks);
+			finish();
+		} catch (err) {
+			actionState = { ...actionState, [key]: { ok: false, message: err.message || 'Couldn’t play this' } };
+		}
+	}
+
+	// Playing a result in the corner player, or null when it can't play there.
+	function playerAction(key, p, r) {
+		if (!p.player) return null;
+		if (r.meta?.track) return { run: () => playTrack(r.meta.track) };
+		if (r.meta?.queue) return { run: () => playTracks(key, p, r) };
+		return null;
+	}
+
 	function resultActions(key, p, r) {
-		// With the player widget on, a song plays in the corner player and
-		// opening it in its app moves to second.
-		const play = p.player && r.meta?.track ? [{ label: 'Play', run: () => playTrack(r.meta.track) }] : [];
+		// With the player widget on, a song, album or playlist plays in the
+		// corner player and opening it in its app moves to second.
+		const player = playerAction(key, p, r);
+		const play = player ? [{ label: 'Play', run: player.run }] : [];
 		const links = r.href ? linkActions(key, r.href, true, play.length ? `Open in ${p.integrationName}` : r.openLabel || 'Open') : [];
 		const extra = resultAction(key, p, r);
 		const all = [...play, ...(extra?.run ? [...links, extra] : links)];
@@ -723,9 +749,7 @@
 						// plays it, while a click elsewhere opens its details.
 						play: r.openLabel === 'Play' && r.href
 							? { run: () => { openUrl(r.href, true); finish(); } }
-							: p.player && r.meta?.track
-								? { run: () => playTrack(r.meta.track) }
-								: null,
+							: playerAction(key, p, r),
 						request: resultAction(key, p, r),
 						showDetail: r.detail ? () => openDetail(key, p, r) : null,
 						tmdb: r.meta?.tmdb,

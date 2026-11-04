@@ -1486,7 +1486,7 @@ body.search-active .launcher-host { z-index: 40; }
 	font-size: 0.72rem;
 	color: var(--hero-search-text-dim);
 }
-.launcher-error { color: #f87171; }
+.launcher-error, .launcher-subtitle.is-error { color: #f87171; }
 .launcher-item { cursor: pointer; outline: none; }
 /* Rows ease in as they arrive, the first six a beat apart; the list slides back in from
    the left when a title's details close (SearchResults' `enter`). */

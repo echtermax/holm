@@ -422,7 +422,9 @@
 									</div>
 									<span class="launcher-text">
 										<span class="launcher-title">{item.title}</span>
-										{#if item.subtitle}<span class="launcher-subtitle">{item.subtitle}</span>{/if}
+										<!-- An album or playlist that couldn't load says so in place of its details. -->
+										{#if item.badge}<span class="launcher-subtitle is-error">{item.badge}</span>
+										{:else if item.subtitle}<span class="launcher-subtitle">{item.subtitle}</span>{/if}
 									</span>
 								{:else if item.more && section.layout !== 'list'}
 									<div class="launcher-thumb-wrap launcher-more">{item.title}</div>

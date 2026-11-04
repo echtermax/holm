@@ -1,11 +1,12 @@
 <script>
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { nowPlaying } from '$lib/stores/player.js';
+	import { nowPlaying, queue, shuffleAfter, playAt } from '$lib/stores/player.js';
 	import { integrations as integrationsStore } from '$lib/stores/integrations.js';
 
-	// Corner player for a song picked in search. Deliberately small: play or
-	// pause, stop, mute, and how far along it is. No seeking and no queue.
+	// Corner player for a song, album or playlist picked in search.
+	// Deliberately small: play or pause, stop, mute, and how far along it is.
+	// An album or playlist plays in turn; a playlist adds Shuffle. No seeking.
 	let audio = $state(null);
 	let paused = $state(true);
 	let muted = $state(false);
@@ -14,6 +15,9 @@
 	let failed = $state(false);
 
 	const track = $derived($nowPlaying);
+	const q = $derived($queue);
+	// Shuffle needs a track after this one to shuffle and jump to.
+	const canShuffle = $derived(q?.type === 'playlist' && q.index < q.tracks.length - 1);
 	// Navidrome knows the length; the element may not (Infinity until the
 	// whole file is in, for some formats), so it's only the fallback.
 	const total = $derived(track?.duration || (Number.isFinite(length) ? length : 0));
@@ -26,7 +30,7 @@
 
 	function save() {
 		if (!track || failed || !audio) return;
-		try { sessionStorage.setItem(SAVED_KEY, JSON.stringify({ track, at: audio.currentTime || 0 })); } catch { /* private mode */ }
+		try { sessionStorage.setItem(SAVED_KEY, JSON.stringify({ track, at: audio.currentTime || 0, queue: get(queue) })); } catch { /* private mode */ }
 	}
 
 	function forget() {
@@ -45,6 +49,8 @@
 		if (!on) return forget();
 		if (get(nowPlaying)) return;
 		resumeAt = Number(saved.at) || 0;
+		const sq = saved.queue;
+		if (Array.isArray(sq?.tracks) && Number.isInteger(sq.index) && sq.tracks[sq.index]) queue.set(sq);
 		nowPlaying.set(saved.track);
 	}
 
@@ -88,7 +94,23 @@
 		audio?.removeAttribute('src');
 		audio?.load();
 		forget();
+		queue.set(null);
 		nowPlaying.set(null);
+	}
+
+	// The next track in the album or playlist; after the last, or for a
+	// single song, the player stops.
+	function next() {
+		const cur = get(queue);
+		if (!playAt(cur, (cur?.index ?? 0) + 1)) stop();
+	}
+
+	// Shuffles every track after this one and jumps to the first of the new
+	// order, so Shuffle right after Play gives a random song.
+	function shuffle() {
+		if (!canShuffle) return;
+		const shuffled = shuffleAfter(q);
+		playAt(shuffled, shuffled.index + 1);
 	}
 
 	function time(s) {
@@ -104,7 +126,7 @@
 	bind:muted
 	bind:currentTime={current}
 	bind:duration={length}
-	onended={stop}
+	onended={next}
 	onerror={() => { if (track) { failed = true; forget(); } }}
 	preload="none"
 ></audio>
@@ -132,6 +154,12 @@
 					<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
 				{/if}
 			</button>
+			{#if q?.type === 'playlist'}
+				<!-- An action, not a switch: each tap reshuffles, so no pressed state. -->
+				<button type="button" class="mini-player-btn" aria-label="Shuffle" onclick={shuffle} disabled={!canShuffle}>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/></svg>
+				</button>
+			{/if}
 			<button type="button" class="mini-player-btn" aria-label="Stop" onclick={stop}>
 				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
 			</button>
