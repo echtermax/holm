@@ -190,7 +190,7 @@ search:
 # Pluggable third-party app adapters. Shipped adapters: Immich, Paperless,
 # Nextcloud, Planka, Karakeep, Linkwarden, Jellyfin, Plex, Navidrome,
 # Audiobookshelf, Mealie, Seerr, Calendar (CalDAV), Miniflux, Komga, Kavita,
-# Papra. Add more in
+# Papra, Thingport, Memos. Add more in
 # src/lib/server/integrations/.
 #
 # Each key must match the adapter's `id`. If an app in the section above has
@@ -352,6 +352,13 @@ integrations:
     enabled: true
     name: "Thingport"
     default_url: "https://thingport.example.com"
+    surfaces:
+      search: true
+      widgets: false
+  memos:
+    enabled: true
+    name: "Memos"
+    default_url: "https://memos.example.com"
     surfaces:
       search: true
       widgets: false
