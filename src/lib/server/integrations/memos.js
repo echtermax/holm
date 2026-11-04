@@ -150,7 +150,8 @@ function splitSnippet(memo) {
 		.replace(/\*\*|__|~~|`/g, '')
 		.trim()
 		.slice(0, 100);
-	const rest = snippet.startsWith(title) ? snippet.slice(title.length).trim() : snippet;
+	// A title cut mid-sentence leaves its separator on the rest (", old one…").
+	const rest = snippet.startsWith(title) ? snippet.slice(title.length).replace(/^[\s,.:;!?–—-]+/, '') : snippet;
 	return { title: title || 'Untitled', rest };
 }
 
