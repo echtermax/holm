@@ -305,11 +305,14 @@
 		const abort = (searchAbort = new AbortController());
 		// Marked loading now, not when its timer fires: a provider with a longer
 		// delay still shows the last query's rows meanwhile, and the progress
-		// bar says they are about to change.
-		providerResults = {
-			...providerResults,
-			...Object.fromEntries(providers.map((p) => [p.providerId, { ...(providerResults[p.providerId] || {}), loading: true, error: '' }]))
-		};
+		// bar says they are about to change. Untracked: this runs inside the
+		// query effect, which must not depend on the results it writes.
+		untrack(() => {
+			providerResults = {
+				...providerResults,
+				...Object.fromEntries(providers.map((p) => [p.providerId, { ...(providerResults[p.providerId] || {}), loading: true, error: '' }]))
+			};
+		});
 		for (const provider of providers) {
 			debounceTimers.push(setTimeout(() => {
 				fireOneProvider(provider, trimmed, abort.signal, key, filter);
