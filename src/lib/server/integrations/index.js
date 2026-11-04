@@ -27,8 +27,9 @@ import miniflux from './miniflux.js';
 import komga from './komga.js';
 import kavita from './kavita.js';
 import thingport from './thingport.js';
+import invidious from './invidious.js';
 
-const KNOWN_ADAPTERS = [immich, paperless, nextcloud, planka, karakeep, linkwarden, jellyfin, plex, navidrome, audiobookshelf, mealie, seerr, caldav, miniflux, komga, kavita, papra, thingport];
+const KNOWN_ADAPTERS = [immich, paperless, nextcloud, planka, karakeep, linkwarden, jellyfin, plex, navidrome, audiobookshelf, mealie, seerr, caldav, miniflux, komga, kavita, papra, thingport, invidious];
 const BY_ID = new Map(KNOWN_ADAPTERS.map((a) => [a.id, a]));
 
 function resolveApp(id) {
@@ -39,9 +40,12 @@ function resolveApp(id) {
 	return null;
 }
 
-function isEnabled(operatorEntry) {
+// A shared integration (Invidious) has no per-user connection to fall back
+// on, so it stays hidden until the operator sets its URL.
+function isEnabled(operatorEntry, adapter) {
 	if (operatorEntry == null) return false;
 	if (typeof operatorEntry !== 'object') return false;
+	if (adapter?.shared && !operatorEntry.default_url) return false;
 	return operatorEntry.enabled !== false;
 }
 
@@ -54,7 +58,7 @@ export function getRegistry() {
 	const out = [];
 	for (const adapter of KNOWN_ADAPTERS) {
 		const operatorEntry = cfg[adapter.id];
-		if (!isEnabled(operatorEntry)) continue;
+		if (!isEnabled(operatorEntry, adapter)) continue;
 		const app = resolveApp(adapter.id);
 		out.push({
 			adapter,
@@ -73,8 +77,8 @@ export function getRegistry() {
  */
 export function getAdapter(id) {
 	const cfg = getIntegrationsConfig() || {};
-	if (!isEnabled(cfg[id])) return null;
-	return BY_ID.get(id) || null;
+	const adapter = BY_ID.get(id) || null;
+	return isEnabled(cfg[id], adapter) ? adapter : null;
 }
 
 /**
@@ -85,7 +89,7 @@ export function getAdapter(id) {
 export function getOperatorDefaults(id) {
 	const cfg = getIntegrationsConfig() || {};
 	const entry = cfg[id];
-	return isEnabled(entry) ? entry : null;
+	return isEnabled(entry, BY_ID.get(id)) ? entry : null;
 }
 
 /**

@@ -664,6 +664,8 @@
 				layout,
 				kind,
 				loading: !!data.loading && (q.length >= 3 || !!activeFilter),
+				// Videos hold their row with three grey tiles until the first ones land.
+				skeleton: layout === 'video' && !!data.loading && (q.length >= 3 || !!activeFilter) && !results.length,
 				error: data.error || '',
 				items: [...results.slice(0, max).map((r) => {
 					const key = `r:${p.providerId}:${r.id}`;
@@ -673,6 +675,8 @@
 						title: r.title,
 						subtitle: r.subtitle,
 						thumbnail: r.thumbnail,
+						duration: r.meta?.duration,
+						info: r.meta?.info,
 						kind: r.meta?.kind,
 						color: r.meta?.color,
 						// A failed action reports here; success shows on the chip. The

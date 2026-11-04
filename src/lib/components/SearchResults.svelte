@@ -229,7 +229,7 @@
 	{:else}
 	<div class="launcher-scroll" id={listId} role="listbox" aria-label="Results" use:enter={back && 'is-back'}>
 		{#each sections as section (section.id)}
-			{#if section.items.length || section.error}
+			{#if section.items.length || section.error || section.skeleton}
 				<div class="launcher-section" role="group" aria-labelledby="{listId}-{section.id}">
 					<div class="launcher-section-label" id="{listId}-{section.id}">
 						<span>{section.label}</span>
@@ -237,7 +237,16 @@
 					{#if section.error}
 						<div class="launcher-error">{section.error}</div>
 					{/if}
-					<div class={section.layout === 'grid' ? 'launcher-grid' : section.layout === 'poster' ? 'launcher-posters' : section.layout === 'tracks' ? 'launcher-tracks' : section.layout === 'answer' ? 'launcher-answers' : 'launcher-rows'}>
+					<div class={section.layout === 'grid' ? 'launcher-grid' : section.layout === 'poster' ? 'launcher-posters' : section.layout === 'tracks' ? 'launcher-tracks' : section.layout === 'video' ? 'launcher-videos' : section.layout === 'answer' ? 'launcher-answers' : 'launcher-rows'}>
+						{#if section.skeleton}
+							{#each [0, 1, 2] as n}
+								<div class="launcher-item is-video is-skeleton" aria-hidden="true">
+									<div class="launcher-thumb-wrap launcher-skeleton-block"></div>
+									<span class="launcher-skeleton-line"></span>
+									<span class="launcher-skeleton-line is-short"></span>
+								</div>
+							{/each}
+						{/if}
 						{#each section.items as item, i (item.key)}
 							{@const isSel = item.key === selectedKey}
 							<!-- Keyboard lives on the search input (combobox + aria-activedescendant). -->
@@ -248,7 +257,7 @@
 								aria-selected={isSel}
 								aria-label={section.layout === 'list' ? undefined : item.answer ? `${item.answer.from.value} = ${[item.answer.to, ...(item.answer.also || [])].map((r) => r.value).join(' = ')}` : [item.title, item.subtitle, item.badge].filter(Boolean).join(', ')}
 								tabindex="-1"
-								class="launcher-item {section.layout === 'grid' ? 'is-tile' : section.layout === 'poster' ? 'is-poster' : section.layout === 'tracks' ? 'is-track' : section.layout === 'answer' ? 'is-answer' : 'is-row'}"
+								class="launcher-item {section.layout === 'grid' ? 'is-tile' : section.layout === 'poster' ? 'is-poster' : section.layout === 'tracks' ? 'is-track' : section.layout === 'video' ? 'is-video' : section.layout === 'answer' ? 'is-answer' : 'is-row'}"
 								class:is-selected={isSel}
 								use:scrollIntoView={isSel}
 								use:enter={!back && 'is-rising'}
@@ -311,6 +320,18 @@
 									</span>
 								{:else if item.more && section.layout !== 'list'}
 									<div class="launcher-thumb-wrap launcher-more">{item.title}</div>
+								{:else if section.layout === 'video'}
+									<!-- Video: 16:9 thumbnail with its length, title, channel, then views and age. -->
+									<div class="launcher-thumb-wrap">
+										<svg class="launcher-thumb-fallback" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>
+										{#if item.thumbnail}
+											<img class="is-loading" use:thumbLoading src={item.thumbnail} alt="" loading="lazy" referrerpolicy="no-referrer" onerror={thumbFailed} />
+										{/if}
+										{#if item.duration}<span class="launcher-duration">{item.duration}</span>{/if}
+									</div>
+									<div class="launcher-poster-title">{item.title}</div>
+									{#if item.subtitle}<div class="launcher-poster-sub">{item.subtitle}</div>{/if}
+									{#if item.info}<div class="launcher-poster-sub">{item.info}</div>{/if}
 								{:else if section.layout === 'grid' || section.layout === 'poster'}
 									<div class="launcher-thumb-wrap">
 										{#if item.thumbnail}

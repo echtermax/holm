@@ -44,6 +44,8 @@
  * @property {Object} [meta]
  * @property {string} [meta.kind]               'photo' triggers the photo-grid variant in SearchResults
  * @property {string} [meta.takenAt]
+ * @property {string} [meta.duration]         A video's length, shown on its thumbnail, e.g. '2:32'
+ * @property {string} [meta.info]             A third line under a video's title, e.g. '9.2M views · 12 years ago'
  * @property {string} [meta.color]              A hex color the result's icon is tinted with (a calendar event's account)
  * @property {string} [meta.status]             Short badge, e.g. 'Available'
  * @property {string} [meta.tmdb]               '<movie|tv>:<tmdb id>' — identifies the title across providers
@@ -55,11 +57,12 @@
  * @typedef {Object} SearchProvider
  * @property {string} label                     Shown in the provider switcher dropdown
  * @property {'inline'|'redirect'} mode         inline = dropdown of results; redirect = form-submit to an external URL
- * @property {'media'|'photo'} [kind]          Results are posters or photos, so the bar shows placeholders of that shape while the first ones load
- * @property {'poster'|'tracks'|'grid'|'list'} [layout]  Overrides the layout picked from kind: media = poster, photo = grid, else list
+ * @property {'media'|'photo'|'video'} [kind]  Results are posters, photos or videos, so the bar shows placeholders of that shape while the first ones load
+ * @property {'poster'|'tracks'|'grid'|'video'|'list'} [layout]  Overrides the layout picked from kind: media = poster, photo = grid, else list. video = 16:9 tiles with `meta.duration` on the art and `meta.info` under the title
  * @property {'video'} [shelf]                Movies and shows from every provider with shelf 'video' share one "Movies & TV" row
  * @property {boolean} [scoped]                Asked only once the user has scoped the bar to this app (`!<shortcut>`): sections such as Tags or Lists that would crowd an everyday search
  * @property {boolean} [filters]               Searches inside a picked `filter`: it receives `filter`, and is the only kind of provider asked while one is picked
+ * @property {(config: object) => string} [failMessage]  Shown instead of "Search failed: …" when the query throws or times out (Invidious: "Couldn’t reach <host>…")
  * @property {(ctx: AdapterContext & { query: string, limit: number, filter?: object }) => Promise<{ results: SearchResultItem[], more?: string }>} query
  *   `more` is where "More in <app>" goes when there are more results than the
  *   section shows, e.g. the app's own results page for this query. Without it
@@ -159,6 +162,7 @@
  * @property {Record<string, SearchProvider>} [searchProviders]
  * @property {Record<string, ProxyHandler>} [proxy]            Optional proxy handlers keyed by name (e.g. 'thumbnail')
  * @property {Record<string, { label: string, description?: string }>} [widgets]  Widgets behind the `widgets` surface, e.g. Navidrome's player; the user's switch is `surfaces.widgets`
+ * @property {boolean} [shared]  The operator's, not the user's: every user is connected to the URL in config.yml (`fromOperatorDefault` fields), with nothing to connect or store; hidden until the operator sets `default_url`
  * @property {boolean} [multiAccount]  The user can add more accounts under the first (up to 5), stored as `config.accounts`: each a config of the same schema plus an `id`, checked and redacted like the first. The adapter reads them all (see accountsOf in caldav.js)
  * @property {boolean} [widgetsOnConnect]  Turn the widgets switch on when the user first connects (where the operator allows widgets); otherwise it starts off
  * @property {(ctx: { config: object, fetch: typeof fetch, timeZone: string }) => Promise<Reminder[]>} [reminders]  Reminders due in the next day, or already due for an event not yet over, for GET /api/reminders; asked only while the user's widgets switch is on

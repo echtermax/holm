@@ -356,6 +356,12 @@ integrations:
       search: true
       widgets: false
 
+  # Shared: one Invidious server for everyone, no sign-in. Pick one whose
+  # /api/v1/search answers JSON; public servers often turn the API off.
+  invidious:
+    enabled: true
+    default_url: "https://invidious.example.com"
+
 # ── Wallpapers ──────────────────────────────────────────────
 wallpapers:
   enabled: true                               # 326 wallpapers from DistroTube's set, fetched through Holm

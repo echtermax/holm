@@ -317,7 +317,9 @@
 		<AppIcon {icon} name={integration.name} size="w-3.5 h-3.5" wrapSize="w-5 h-5" {iconStyle} wrap />
 		<div class="flex-1 min-w-0">
 			<span class="text-[0.8rem] text-content font-medium">{integration.name}</span>
-			{#if signedInAs && !expanded}
+			{#if integration.operatorNote}
+				<span class="block text-[0.7rem] text-content-dim truncate">{integration.operatorNote}</span>
+			{:else if signedInAs && !expanded}
 				<span class="block text-[0.7rem] text-content-dim truncate">Signed in as {signedInAs}</span>
 			{:else if linkNote && (expanded || !connected)}
 				<span class="block text-[0.7rem] text-content-dim truncate">{linkNote}</span>
@@ -341,6 +343,7 @@
 					</span>
 				{/if}
 				<span class="text-[0.7rem] font-mono text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-400/30 bg-emerald-500/5">Connected</span>
+				{#if !integration.operatorNote}
 				<div class="relative" bind:this={menuEl}>
 					<button
 						class="w-7 h-7 rounded-lg border border-border-card bg-transparent text-content-dim cursor-pointer hover:text-content hover:bg-surface-card-hover transition-colors flex items-center justify-center"
@@ -366,6 +369,7 @@
 						</div>
 					{/if}
 				</div>
+				{/if}
 			{:else}
 				<button
 					class="text-[0.7rem] font-mono text-content-dim px-2.5 py-1 rounded-lg border border-border-card bg-transparent cursor-pointer hover:text-content hover:bg-surface-card-hover transition-colors"
