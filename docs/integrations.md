@@ -28,6 +28,7 @@ Holm has two kinds of app support.
 | Papra | Documents, by name and content | URL + read-only API token + organization ID | `!papra` |
 | Thingport | 3D models; under `!tp`, collections and tags too; "More" opens Thingport's results page | URL + API token | `!tp` |
 | Memos | The user's own memos (full text), with tags and date | URL + access token (Memos 0.26 or later) | `!memo` |
+| Plane | Work items, by title or ID (`WEB-42`), across the workspace's projects | URL + workspace + API key (Plane 1.1 or later) | `!plane` |
 
 Integrations are marked Alpha in the UI. The widgets so far are Navidrome's player and the Calendar's reminders and upcoming events.
 
