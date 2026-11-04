@@ -1071,6 +1071,23 @@
 		return () => document.body.classList.remove('search-active');
 	});
 
+	// On phones the open palette is pinned under the status bar by a lift
+	// measured from where the bar sits in the page, so the page must not
+	// scroll underneath it: a scroll carried the input up off the screen,
+	// and the lift chasing it made the scroll stutter. Fixing the body at
+	// its current offset freezes the page without a jump, and closing puts
+	// the scroll position back. The results list still scrolls on its own.
+	$effect(() => {
+		if (!inlineOpen || !window.matchMedia('(max-width: 767px)').matches) return;
+		const y = window.scrollY;
+		const s = document.body.style;
+		Object.assign(s, { position: 'fixed', top: `-${y}px`, left: '0', right: '0' });
+		return () => {
+			Object.assign(s, { position: '', top: '', left: '', right: '' });
+			window.scrollTo(0, y);
+		};
+	});
+
 	const listId = 'launcher-list';
 	const emptyText = $derived(
 		(query || '').trim().startsWith('!') && !activeScope ? 'No command or scope by that name. Type ! on its own to see them all.' : ''
