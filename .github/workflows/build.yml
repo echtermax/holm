@@ -3,22 +3,104 @@ name: Build & Push Docker Image
 on:
   push:
     branches: [dev, main]
-    tags: ['v*']
+    # Alpha tags only. Prod's vX.Y.Z tags have no "-alpha." and don't match.
+    tags: ['v*-alpha.*']
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  # Alpha image — pushed on dev merge
-  alpha:
-    runs-on: ubuntu-latest
+  # A push to dev publishes an alpha only when it came from a PR into dev whose
+  # title contains [release]; anything else ends here, green. No secrets in this
+  # job, and the title only ever reaches jq, never a shell.
+  alpha-gate:
     if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
     permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      publish: ${{ steps.marker.outputs.publish }}
+    steps:
+      - name: "[release] in the PR title"
+        id: marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # GitHub links a merge commit to its PR a few seconds after the push, and
+        # this run often starts first: an empty answer means "not yet", so ask
+        # again (6 tries, 10 s apart) until a merged PR into dev turns up.
+        run: |
+          for try in 1 2 3 4 5 6; do
+            PUBLISH=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq \
+              '[.[] | select(.base.ref == "dev" and .merged_at != null)]
+               | if length == 0 then "" else any(.[]; .title | ascii_downcase | contains("[release]")) end') || PUBLISH=
+            [ -n "$PUBLISH" ] && break
+            [ "$try" -lt 6 ] && echo "No merged PR linked to ${GITHUB_SHA::7} yet (try $try of 6); asking again in 10 s" && sleep 10
+          done
+          if [ "$PUBLISH" != true ]; then
+            echo "::notice::No merged PR into dev with [release] in its title for ${GITHUB_SHA::7}; no alpha this time"
+            PUBLISH=false
+          fi
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+
+  # Alpha: publishes the next v<package.json version>-alpha.N as a pre-release,
+  # with images :alpha and :X.Y.Z-alpha.N, for a [release] merge into dev;
+  # pushing such a tag on a dev commit by hand does the same for that tag. The
+  # update check reads releases/latest, which skips pre-releases.
+  alpha:
+    needs: alpha-gate
+    # always(): a tag push skips the gate, and a skipped need would skip this job too.
+    if: always() && (github.ref_type == 'tag' || needs.alpha-gate.outputs.publish == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
       packages: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the tags, and dev for the check below
+
+      - name: Tag
+        id: tag
+        run: |
+          NAME=$(node -p 'require("./package.json").version')
+          if git rev-parse -q --verify "refs/tags/v$NAME" >/dev/null; then
+            echo "::error::v$NAME is already released; raise the version in package.json before an alpha"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = branch ]; then
+            # A push to dev: one past the highest alpha of this version. The tag
+            # is pushed only after the image is built, in the pre-release step.
+            LAST=$(git tag -l "v$NAME-alpha.*" | sed 's/.*-alpha\.//' | grep -E '^[0-9]+$' | sort -n | tail -n 1)
+            N=$(( ${LAST:-0} + 1 ))
+            echo "tag=v$NAME-alpha.$N" >> "$GITHUB_OUTPUT"
+            echo "version=$NAME-alpha.$N" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TAG="$GITHUB_REF_NAME"
+          N="${TAG##*-alpha.}"
+          if ! [[ "$N" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::$TAG must end in -alpha.<number>, like v0.12.0-alpha.1"
+            exit 1
+          fi
+          V="${TAG#v}"; V="${V%-alpha.*}"
+          if [ "$V" != "$NAME" ]; then
+            echo "::error::$TAG is version $V, but package.json is $NAME; tag v$NAME-alpha.<number> instead"
+            exit 1
+          fi
+          git fetch --no-tags origin +refs/heads/dev:refs/remotes/origin/dev
+          if ! git merge-base --is-ancestor "$(git rev-parse "$TAG^{commit}")" origin/dev; then
+            echo "::error::$TAG is not on dev; alpha tags go on dev commits only"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$NAME-alpha.$N" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
 
@@ -36,72 +118,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=alpha
-            type=sha
-
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # Prod image — pushed on main merge, tagged with the next version
-  prod:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0  # tags are the version source
-
-      - uses: docker/setup-qemu-action@v3
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # The version comes from git tags, not from a commit on main: the
-      # branch ruleset only accepts changes through a pull request, so a
-      # bump commit pushed from here would be rejected. Next version is the
-      # latest v* tag plus one patch, unless package.json was raised past it
-      # by hand (a minor or major release), in which case that is used as-is.
-      - name: Next version
-        id: bump
-        run: |
-          CURRENT=$(node -p 'require("./package.json").version')
-          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//' | sort -V | tail -n 1)
-          if [ -z "$LATEST" ]; then
-            NEW_VERSION="$CURRENT"
-          elif [ "$CURRENT" != "$LATEST" ] && [ "$(printf '%s\n%s\n' "$CURRENT" "$LATEST" | sort -V | tail -n 1)" = "$CURRENT" ]; then
-            NEW_VERSION="$CURRENT"
-          else
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST"
-            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
-          fi
-          # Baked into the image only; not committed.
-          node -e "const p=require('./package.json'); p.version='$NEW_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-
-      - uses: docker/metadata-action@v5
-        id: meta
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=raw,value=stable
-            type=raw,value=${{ steps.bump.outputs.version }}
+            type=raw,value=${{ steps.tag.outputs.version }}
             type=sha
 
       - uses: docker/build-push-action@v5
@@ -115,29 +132,132 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Tag release
-        run: |
-          git tag "v${{ steps.bump.outputs.version }}"
-          git push origin "v${{ steps.bump.outputs.version }}"
-
-      # A GitHub Release for the tag, so Holm's update check (and anyone
-      # watching the repo) sees it. The notes are that version's section of
-      # CHANGELOG.md; an automatic patch bump has none, so it gets one line.
-      # Under them goes the image this run pushed, by tag and by digest.
-      - name: GitHub release
+      - name: Alpha pre-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          V: ${{ steps.bump.outputs.version }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          V: ${{ steps.tag.outputs.version }}
           IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
+          if [ "$GITHUB_REF_TYPE" = branch ]; then
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "$TAG"
+          fi
+          # The nearest tag before this commit, alpha or prod; a glob would find the tag just pushed.
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_SHA^" 2>/dev/null || true)
+          # Lowercased, as metadata-action pushed it.
+          IMG=${IMG,,}
+          {
+            echo "Alpha build $TAG from \`${GITHUB_SHA::7}\` on dev. Untested and may break."
+            echo
+            echo "### Commits since ${PREV:-the first commit}"
+            echo
+            git log --no-merges --pretty='- %s (%h)' ${PREV:+"$PREV.."}HEAD
+            echo
+            echo "### Docker image"
+            echo
+            echo '```'
+            echo "docker pull $IMG:$V"
+            echo '```'
+            echo
+            echo "Pinned: \`$IMG@$DIGEST\` (linux/amd64, linux/arm64)"
+          } > notes.md
+          gh release create "$TAG" --prerelease --verify-tag \
+            --title "Holm $TAG" --notes-file notes.md
+
+  # Prod: a merge into main tags vX.Y.Z from package.json and publishes the
+  # image and the GitHub release. test.yml has already made sure the version is
+  # new and has its CHANGELOG.md section.
+  prod:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the tags
+
+      - name: Version
+        id: version
+        run: |
+          V=$(node -p 'require("./package.json").version')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+            echo "::notice::v$V is already released; nothing to do"
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The release notes, read before anything is pushed: no section, no release.
           awk -v v="$V" '
             /^## / { if (on) exit; h = $0; sub(/^## v?/, "", h); split(h, a, /[ \t]/); on = (a[1] == v); next }
             on
           ' CHANGELOG.md > notes.md
           if ! grep -q '[^[:space:]]' notes.md; then
-            echo "Maintenance build of Holm $V from ${GITHUB_SHA::7}. Notable changes are in CHANGELOG.md." > notes.md
+            echo "::error::CHANGELOG.md has no notes under '## $V'"
+            exit 1
           fi
+          echo "new=true" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+        if: steps.version.outputs.new == 'true'
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.version.outputs.new == 'true'
+
+      - uses: docker/login-action@v3
+        if: steps.version.outputs.new == 'true'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        if: steps.version.outputs.new == 'true'
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=stable
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=sha
+
+      - uses: docker/build-push-action@v5
+        if: steps.version.outputs.new == 'true'
+        id: build
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Tag release
+        if: steps.version.outputs.new == 'true'
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: |
+          git tag "v$V"
+          git push origin "v$V"
+
+      # A GitHub Release for the tag, so Holm's update check (and anyone
+      # watching the repo) sees it. The notes are that version's section of
+      # CHANGELOG.md (notes.md, from the Version step), then the image this run
+      # pushed, by tag and by digest.
+      - name: GitHub release
+        if: steps.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.version.outputs.version }}
+          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
           # Lowercased, as metadata-action pushed it.
           IMG=${IMG,,}
           cat >> notes.md <<EOF
