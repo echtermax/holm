@@ -361,7 +361,7 @@
 								id="{listId}-{item.key}"
 								role="option"
 								aria-selected={isSel}
-								aria-label={item.answer ? `${item.answer.from.value} = ${[item.answer.to, ...(item.answer.also || [])].map((r) => r.value).join(' = ')}` : [item.title, item.subtitle, item.badge].filter(Boolean).join(', ')}
+								aria-label={section.layout === 'list' ? undefined : item.answer ? `${item.answer.from.value} = ${[item.answer.to, ...(item.answer.also || [])].map((r) => r.value).join(' = ')}` : [item.title, item.subtitle, item.badge].filter(Boolean).join(', ')}
 								tabindex="-1"
 								class="launcher-item {section.layout === 'grid' ? 'is-tile' : section.layout === 'poster' ? 'is-poster' : section.layout === 'tracks' ? 'is-track' : section.layout === 'video' ? 'is-video' : section.layout === 'answer' ? 'is-answer' : 'is-row'}"
 								class:is-selected={isSel}
