@@ -361,7 +361,7 @@
 								id="{listId}-{item.key}"
 								role="option"
 								aria-selected={isSel}
-								aria-label={section.layout === 'list' ? undefined : item.answer ? `${item.answer.from.value} = ${[item.answer.to, ...(item.answer.also || [])].map((r) => r.value).join(' = ')}` : [item.title, item.subtitle, item.badge].filter(Boolean).join(', ')}
+								aria-label={item.answer ? `${item.answer.from.value} = ${[item.answer.to, ...(item.answer.also || [])].map((r) => r.value).join(' = ')}` : [item.title, item.subtitle, item.badge].filter(Boolean).join(', ')}
 								tabindex="-1"
 								class="launcher-item {section.layout === 'grid' ? 'is-tile' : section.layout === 'poster' ? 'is-poster' : section.layout === 'tracks' ? 'is-track' : section.layout === 'video' ? 'is-video' : section.layout === 'answer' ? 'is-answer' : 'is-row'}"
 								class:is-selected={isSel}
@@ -511,6 +511,8 @@
 											{#each item.tags.slice(0, 3) as tag}<span class="launcher-tag">{tag}</span>{/each}
 										</span>
 									{/if}
+									<!-- Outside .launcher-tags so it still shows on phones. -->
+									{#if item.badge}<span class="launcher-tag">{item.badge}</span>{/if}
 									{#if item.accessory}<span class="launcher-accessory">{item.accessory}</span>{/if}
 								{/if}
 							</div>
