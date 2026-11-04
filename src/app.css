@@ -314,8 +314,10 @@ body {
 
 /* iOS 27 draws its own blur over the top of an installed web app, and
    backdrop-filter can't turn it off because the OS paints it, not the page.
-   A painted strip at the very top of the screen stops it. Standalone only,
-   so the browser-tab view is unchanged; --bg follows the active theme. */
+   A strip at the very top of the screen with a background colour set stops
+   it. background-clip: text keeps the empty strip invisible, so wallpaper
+   still shows under the status bar; the --bg colour is only there for iOS.
+   Standalone only, so the browser-tab view is unchanged. */
 .pwa-top-strip {
 	display: none;
 }
@@ -326,6 +328,8 @@ body {
 		inset: 0 0 auto;
 		height: 11px;
 		background-color: var(--bg);
+		-webkit-background-clip: text;
+		background-clip: text;
 		pointer-events: none;
 		z-index: 10000;
 	}
