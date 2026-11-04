@@ -33,4 +33,5 @@
 	{@html `<style>:root { --font-family: '${fontFamily}', monospace; --accent: ${accentColor}; } body { font-family: var(--font-family); }</style>`}
 </svelte:head>
 
+<div class="pwa-top-strip" aria-hidden="true"></div>
 {@render children()}

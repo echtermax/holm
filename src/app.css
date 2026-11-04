@@ -312,6 +312,25 @@ body {
 	max-width: 100vw;
 }
 
+/* iOS 27 draws its own blur over the top of an installed web app, and
+   backdrop-filter can't turn it off because the OS paints it, not the page.
+   A painted strip at the very top of the screen stops it. Standalone only,
+   so the browser-tab view is unchanged; --bg follows the active theme. */
+.pwa-top-strip {
+	display: none;
+}
+@media (display-mode: standalone) {
+	.pwa-top-strip {
+		display: block;
+		position: fixed;
+		inset: 0 0 auto;
+		height: 11px;
+		background-color: var(--bg);
+		pointer-events: none;
+		z-index: 10000;
+	}
+}
+
 /* Login/password screen overlay & button — theme-aware */
 .login-overlay {
 	background: linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 50%, rgba(0,0,0,0.15) 100%);
