@@ -9,8 +9,11 @@
 // filter follows whichever name the server hands back.
 
 // The filter for "memos this user created" changes per release, and the user
-// behind a token doesn't, so it is looked up once per token.
+// behind a token doesn't, so it is looked up per token and kept for a few
+// minutes; the expiry picks up a rename on 0.27+, where the filter is the
+// username.
 const creatorCache = new Map();
+const CREATOR_CACHE_TTL_MS = 5 * 60_000; // 5 minutes
 
 /** @type {import('./_types.js').IntegrationAdapter} */
 const adapter = {
@@ -115,7 +118,7 @@ const adapter = {
 async function creatorFilter(base, config, fetch) {
 	const cacheKey = `${config.url}:${config.apiKey}`;
 	const cached = creatorCache.get(cacheKey);
-	if (cached) return cached;
+	if (cached && Date.now() < cached.expiresAt) return cached.filter;
 
 	const res = await fetch(`${base}/api/v1/auth/me`, {
 		method: 'GET',
@@ -132,7 +135,7 @@ async function creatorFilter(base, config, fetch) {
 	} else {
 		throw new Error('Memos 0.26 or later is required');
 	}
-	creatorCache.set(cacheKey, filter);
+	creatorCache.set(cacheKey, { filter, expiresAt: Date.now() + CREATOR_CACHE_TTL_MS });
 	return filter;
 }
 
