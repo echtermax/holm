@@ -10,16 +10,15 @@ to the version and date.
 
 ## Unreleased
 
-- **New:** Search GitHub and Gitea repos, issues and PRs; `!gh` and `!gt` split them into sections. ([#123](https://github.com/man15h/holm/pull/123))
-- **Improved:** Opening a search result keeps the results open for the next one. ([#123](https://github.com/man15h/holm/pull/123))
-- **Fixed:** An app switched off for search still answers its `!` shortcut. ([#123](https://github.com/man15h/holm/pull/123))
-- **New:** Open Memos notes and Plane work items in place; tick memo checklists from Holm. ([#127](https://github.com/man15h/holm/pull/127))
-- **New:** Set each theme's page colour, like true black, in `config.yml`. ([#126](https://github.com/man15h/holm/pull/126))
-- **New:** Play Navidrome albums and playlists in the corner player. ([#126](https://github.com/man15h/holm/pull/126))
-- **New:** Shuffle the rest of a playlist from the corner player. ([#126](https://github.com/man15h/holm/pull/126))
-- **New:** Set the corner player's volume with a slider. ([#126](https://github.com/man15h/holm/pull/126))
 - **New:** Search YouTube with `!yt` through an Invidious server. ([#125](https://github.com/man15h/holm/pull/125))
+- **New:** Search GitHub and Gitea repos, issues and PRs; `!gh` and `!gt` split them into sections. ([#123](https://github.com/man15h/holm/pull/123))
+- **New:** Search Memos and Plane, open results in place, tick memo checklists. ([#122](https://github.com/man15h/holm/pull/122), [#127](https://github.com/man15h/holm/pull/127))
+- **New:** Play Navidrome albums and playlists in the corner player, with Shuffle. ([#126](https://github.com/man15h/holm/pull/126))
+- **New:** Set the corner player's volume with a slider. ([#126](https://github.com/man15h/holm/pull/126))
+- **New:** Set each theme's page colour, like true black, in `config.yml`. ([#126](https://github.com/man15h/holm/pull/126))
+- **Improved:** Opening a search result keeps the results open for the next one. ([#123](https://github.com/man15h/holm/pull/123))
 - **Fixed:** No more iOS top blur in the installed app; phone search stays on screen. ([#120](https://github.com/man15h/holm/pull/120))
+- **Fixed:** An app switched off for search still answers its `!` shortcut. ([#123](https://github.com/man15h/holm/pull/123))
 
 ## 0.11.0 — 2026-10-25
 
