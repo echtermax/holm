@@ -25,6 +25,12 @@ test('unscoped search leaves out scope-only sections', () => {
 	assert.deepEqual(ids(providersFor(providers, null, null)), ['karakeep:bookmarks', 'immich:photos']);
 });
 
+test('an app with its Search toggle off answers only its own scope', () => {
+	const off = [...providers, { providerId: 'github:summary', integrationId: 'github', searchOff: true }];
+	assert.deepEqual(ids(providersFor(off, null, null)), ['karakeep:bookmarks', 'immich:photos']);
+	assert.deepEqual(ids(providersFor(off, 'github', null)), ['github:summary']);
+});
+
 test('scoped to an app, all its sections answer', () => {
 	assert.deepEqual(ids(providersFor(providers, 'karakeep', null)), ['karakeep:bookmarks', 'karakeep:tags', 'karakeep:lists']);
 	assert.deepEqual(ids(providersFor(providers, 'immich', null)), ['immich:photos']);

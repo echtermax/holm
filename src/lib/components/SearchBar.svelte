@@ -74,8 +74,9 @@
 	// There is no provider switcher. The form's submit target is the
 	// configured web search (Enter key fires it in a new tab). Every
 	// connected integration that exposes inline-mode search providers
-	// AND has the user's `surfaces.search` toggle on runs automatically
-	// on every keystroke; results land in the dropdown below the bar.
+	// runs automatically on every keystroke; results land in the dropdown
+	// below the bar. With the user's `surfaces.search` toggle off, an app
+	// sits out plain search but still answers its own `!` scope.
 	//
 	// This matches the iPhone Spotlight model: one box, one experience,
 	// no clicks to switch contexts.
@@ -84,7 +85,6 @@
 		const out = [];
 		for (const it of $integrationsStore.integrations) {
 			if (!it.userState?.connected) continue;
-			if (it.userState?.surfaces?.search === false) continue;
 			if (!(it.availableSurfaces || []).includes('search')) continue;
 			for (const [key, prov] of Object.entries(it.searchProviders || {})) {
 				if (prov.mode !== 'inline') continue;
@@ -100,6 +100,7 @@
 					shelf: prov.shelf,
 					scoped: prov.scoped,
 					plainOnly: prov.plainOnly,
+					searchOff: it.userState?.surfaces?.search === false,
 					filters: prov.filters,
 					delay: prov.delay,
 					// Navidrome's player widget: songs play in Holm instead of opening.
@@ -389,14 +390,17 @@
 	// one-off result opens would otherwise evict app history.
 	const noteOpen = (key) => { if (key.startsWith('app:')) recordOpen(key); };
 
-	function linkActions(key, url, newTabFirst, openLabel = 'Open') {
-		const open = { label: openLabel, run: () => { noteOpen(key); openUrl(url, newTabFirst); finish(); } };
+	// A single result opens and leaves the list where it was, so the next one
+	// is a click away; launching an app, "More in …" and the web search close it.
+	function linkActions(key, url, newTabFirst, openLabel = 'Open', close = true) {
+		const done = close ? finish : () => {};
+		const open = { label: openLabel, run: () => { noteOpen(key); openUrl(url, newTabFirst); done(); } };
 		const other = {
 			label: newTabFirst ? 'Open in this tab' : 'Open in new tab',
 			hint: '⌘ ↵',
-			run: () => { noteOpen(key); openUrl(url, !newTabFirst); finish(); }
+			run: () => { noteOpen(key); openUrl(url, !newTabFirst); done(); }
 		};
-		const copy = { label: 'Copy link', hint: '⌘ ⇧ C', run: () => { copyText(url); finish(); } };
+		const copy = { label: 'Copy link', hint: '⌘ ⇧ C', run: () => { copyText(url); done(); } };
 		return [open, other, copy];
 	}
 
@@ -461,7 +465,7 @@
 		// corner player and opening it in its app moves to second.
 		const player = playerAction(key, p, r);
 		const play = player ? [{ label: 'Play', run: player.run }] : [];
-		const links = r.href ? linkActions(key, r.href, true, play.length ? `Open in ${p.integrationName}` : r.openLabel || 'Open') : [];
+		const links = r.href ? linkActions(key, r.href, true, play.length ? `Open in ${p.integrationName}` : r.openLabel || 'Open', false) : [];
 		const extra = resultAction(key, p, r);
 		const all = [...play, ...(extra?.run ? [...links, extra] : links)];
 		return r.detail ? [{ label: 'Show details', run: () => openDetail(key, p, r) }, ...all] : all;
@@ -470,7 +474,7 @@
 	// A tag or list: Enter searches inside it, ⌘↵ opens it in its app.
 	function filterActions(key, p, r) {
 		const inside = { label: `Search in ${r.filter.label}`, run: () => drillIn(p, r) };
-		return [inside, ...(r.href ? linkActions(key, r.href, true, `Open in ${p.integrationName}`) : [])];
+		return [inside, ...(r.href ? linkActions(key, r.href, true, `Open in ${p.integrationName}`, false) : [])];
 	}
 
 	function drillIn(p, r) {
@@ -551,12 +555,12 @@
 		badge: (actionState[detailView.key]?.ok === false && actionState[detailView.key].message) || '',
 		request: resultAction(detailView.key, detailView.p, detailView.r),
 		open: detailView.r.href
-			? { ...openOn(detailView.p, detailView.r), run: () => { openUrl(detailView.r.href, true); finish(); } }
+			? { ...openOn(detailView.p, detailView.r), run: () => openUrl(detailView.r.href, true) }
 			: null,
 		// A link the details bring (an event's video call). The label names
 		// the host, since anyone who sends an invite picks the link.
 		link: detailView.data?.link?.href && /^https:\/\//.test(detailView.data.link.href)
-			? { label: `${detailView.data.link.label || 'Open'} · ${new URL(detailView.data.link.href).host}`, run: () => { openUrl(detailView.data.link.href, true); finish(); } }
+			? { label: `${detailView.data.link.label || 'Open'} · ${new URL(detailView.data.link.href).host}`, run: () => openUrl(detailView.data.link.href, true) }
 			: null
 	});
 
@@ -765,7 +769,7 @@
 						// A movie or show the user has: the play mark on the art
 						// plays it, while a click elsewhere opens its details.
 						play: r.openLabel === 'Play' && r.href
-							? { run: () => { openUrl(r.href, true); finish(); } }
+							? { run: () => openUrl(r.href, true) }
 							: playerAction(key, p, r),
 						request: resultAction(key, p, r),
 						showDetail: r.detail ? () => openDetail(key, p, r) : null,
@@ -857,7 +861,7 @@
 		if (item.url && e && 'button' in e && (mod || e.button === 1)) {
 			noteOpen(item.key);
 			openUrl(item.url, true);
-			finish();
+			if (item.more || item.key === 'web' || item.key.startsWith('app:')) finish();
 			return;
 		}
 		const action = mod && item.actions[1] ? item.actions[1] : item.actions[0];

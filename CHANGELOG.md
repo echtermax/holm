@@ -11,6 +11,8 @@ to the version and date.
 ## Unreleased
 
 - **New:** Search GitHub and Gitea repos, issues and PRs; `!gh` and `!gt` split them into sections. ([#123](https://github.com/man15h/holm/pull/123))
+- **Improved:** Opening a search result keeps the results open for the next one. ([#123](https://github.com/man15h/holm/pull/123))
+- **Fixed:** An app switched off for search still answers its `!` shortcut. ([#123](https://github.com/man15h/holm/pull/123))
 - **New:** Open Memos notes and Plane work items in place; tick memo checklists from Holm. ([#127](https://github.com/man15h/holm/pull/127))
 - **New:** Set each theme's page colour, like true black, in `config.yml`. ([#126](https://github.com/man15h/holm/pull/126))
 - **New:** Play Navidrome albums and playlists in the corner player. ([#126](https://github.com/man15h/holm/pull/126))
