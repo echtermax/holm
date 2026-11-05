@@ -10,7 +10,7 @@ to the version and date.
 
 ## Unreleased
 
-- **Improved:** YouTube search can answer in a chosen country's language. ([#PR](https://github.com/man15h/holm/pull/PR))
+- **Improved:** YouTube search can answer in a chosen country's language. ([#129](https://github.com/man15h/holm/pull/129))
 
 ## 0.12.0 — 2026-11-05
 
