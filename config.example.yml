@@ -394,6 +394,7 @@ integrations:
     enabled: true
     default_url: "https://invidious.example.com"
     # open_url: "https://www.youtube.com"      # optional: open videos there instead of on the Invidious server
+    # region: "GB"                              # optional: two-letter country code; results in that country's language
 
 # ── Wallpapers ──────────────────────────────────────────────
 wallpapers:

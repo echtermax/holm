@@ -74,6 +74,21 @@ test('open_url sends videos and "More" elsewhere, search still goes to the insta
 	assert.equal(bad.results[0].href, 'https://inv.example.com/watch?v=2LqzF5WauAw');
 });
 
+test('region goes to YouTube as a two-letter code; without one, or a bad one, nothing is sent', async () => {
+	const regionOf = async (region) => {
+		const { fetch, calls } = fakeFetch(videos);
+		await invidious.searchProviders.videos.query({ config: { ...config, region }, query: 'interstellar', limit: 24, fetch });
+		return new URL(calls[0]).searchParams.get('region');
+	};
+	assert.equal(await regionOf('GB'), 'GB');
+	assert.equal(await regionOf('us'), 'US');
+	for (const bad of [undefined, '', 'GBR', 'G1', 'US&x=1']) assert.equal(await regionOf(bad), null);
+
+	const { fetch, calls } = fakeFetch(videos);
+	await invidious.test({ config: { ...config, region: 'GB' }, fetch });
+	assert.equal(new URL(calls[0]).searchParams.get('region'), 'GB');
+});
+
 test('a bot-check page or an error status counts as down', async () => {
 	const html = fakeFetch('<!doctype html><title>Verifying your browser…</title>', { headers: { 'content-type': 'text/html' } });
 	await assert.rejects(search(html.fetch));

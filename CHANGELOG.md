@@ -8,6 +8,10 @@ twelve words, ending with a link to its PR. Each pull request into `dev` adds
 its line under `## Unreleased`; the release pull request renames that heading
 to the version and date.
 
+## Unreleased
+
+- **Improved:** YouTube search can answer in a chosen country's language. ([#PR](https://github.com/man15h/holm/pull/PR))
+
 ## 0.12.0 — 2026-11-05
 
 - **New:** Search YouTube with `!yt` through an Invidious server. ([#125](https://github.com/man15h/holm/pull/125))

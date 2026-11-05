@@ -29,6 +29,11 @@ test('the config is always the operator\'s, never the row\'s', () => {
 	assert.deepEqual(conn.config, { url: 'https://inv.example.com', openUrl: 'https://www.youtube.com' });
 });
 
+test('the operator\'s region reaches the config, though it is not a URL', () => {
+	const conn = sharedConnection(invidious, { ...operator, region: 'GB' }, null);
+	assert.deepEqual(conn.config, { url: 'https://inv.example.com', openUrl: 'https://www.youtube.com', region: 'GB' });
+});
+
 test('a broken row counts as nothing saved', () => {
 	assert.deepEqual(sharedConnection(invidious, operator, { surfaces_json: '{not json' }).surfaces, { search: true });
 });

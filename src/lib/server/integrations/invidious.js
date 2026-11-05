@@ -10,6 +10,10 @@
 //
 // Videos open on the instance, or on `open_url` when the operator sets one
 // (e.g. https://www.youtube.com): search through Invidious, watch elsewhere.
+//
+// `region` (a two-letter country code, e.g. GB) picks the country YouTube
+// answers for. Without it YouTube goes by where the instance is, so a server
+// abroad can answer in another language.
 
 // Tiles render 208 CSS px wide; the 320x180 "mqdefault" frame is 16:9 and
 // sharp enough at that size.
@@ -29,14 +33,15 @@ const adapter = {
 
 	configSchema: [
 		{ key: 'url', type: 'url', label: 'Invidious URL', required: true, fromOperatorDefault: 'default_url' },
-		{ key: 'openUrl', type: 'url', label: 'Open videos on', fromOperatorDefault: 'open_url' }
+		{ key: 'openUrl', type: 'url', label: 'Open videos on', fromOperatorDefault: 'open_url' },
+		{ key: 'region', type: 'text', label: 'Region', fromOperatorDefault: 'region' }
 	],
 
 	async test({ config, fetch }) {
 		const base = baseUrl(config?.url);
 		if (!base) return { ok: false, message: 'Set integrations.invidious.default_url in config.yml' };
 		try {
-			await search(base, 'test', fetch);
+			await search(base, 'test', fetch, config.region);
 			return { ok: true, message: 'Connected' };
 		} catch {
 			return { ok: false, message: unreachable(base) };
@@ -55,7 +60,7 @@ const adapter = {
 				const trimmed = (query || '').trim();
 				if (!base || !trimmed) return { results: [] };
 
-				const videos = await search(base, trimmed, fetch);
+				const videos = await search(base, trimmed, fetch, config.region);
 				const open = baseUrl(config.openUrl) || base;
 				return {
 					results: videos
@@ -109,8 +114,9 @@ function baseUrl(value) {
 
 // Public instances often answer with a bot check page instead of JSON, so
 // anything but a JSON array counts as down.
-async function search(base, q, fetch) {
+async function search(base, q, fetch, region) {
 	const params = new URLSearchParams({ q, type: 'video' });
+	if (/^[A-Za-z]{2}$/.test(region || '')) params.set('region', region.toUpperCase());
 	const res = await fetch(`${base}/api/v1/search?${params}`, {
 		method: 'GET',
 		headers: { accept: 'application/json' }

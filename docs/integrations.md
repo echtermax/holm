@@ -65,9 +65,12 @@ integrations:
   invidious:
     default_url: "https://invidious.example.com"
     open_url: "https://www.youtube.com"   # optional
+    region: "GB"                          # optional
 ```
 
 Videos open on the Invidious server, unless `open_url` is set. Then a video opens at `<open_url>/watch?v=<id>`, and "More" opens that site's results page, while search and thumbnails still go through Invidious.
+
+`region` is a two-letter country code (`US`, `GB`, …) that Holm sends with every search, so YouTube answers for that country, in its language. Without it YouTube goes by where the Invidious server is, which can mean results in another language. Anything other than two letters is ignored.
 
 Public Invidious servers come and go, and many turn their API off or answer with a browser check, which Holm reports as "Couldn’t reach <host>". Check that `<default_url>/api/v1/search?q=test&type=video` returns JSON, or run your own.
 
