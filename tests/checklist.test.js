@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { progressOf, sameTask, setTask, tasksOf } from '../src/lib/checklist.js';
+import { oneAtATime, progressOf, sameTask, setTask, tasksOf } from '../src/lib/checklist.js';
 
 const memo = [
 	'# Errands',
@@ -54,4 +54,24 @@ test('sameTask ignores Markdown marks and link targets', () => {
 	assert.ok(sameTask('**call** the [bank](https://bank.example)', 'call the bank'));
 	assert.ok(sameTask('`pay` water bill', 'Pay water bill'));
 	assert.ok(!sameTask('pay water bill', 'pay gas bill'));
+});
+
+test('oneAtATime: overlapping saves run one after another, so neither is lost', async () => {
+	// Two ticks in quick succession, each a read-modify-write of the memo.
+	let stored = '- [ ] milk\n- [ ] eggs';
+	const save = async (index) => {
+		const read = stored;
+		await new Promise((r) => setTimeout(r, 10));
+		stored = setTask(read, index, true);
+		return index;
+	};
+	const next = oneAtATime();
+	assert.deepEqual(await Promise.all([next(() => save(0)), next(() => save(1))]), [0, 1]);
+	assert.equal(stored, '- [x] milk\n- [x] eggs');
+
+	// A failed save doesn't stop the next one.
+	const failed = next(() => Promise.reject(new Error('nope')));
+	const after = next(() => 'ran');
+	await assert.rejects(failed, /nope/);
+	assert.equal(await after, 'ran');
 });

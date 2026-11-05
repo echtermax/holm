@@ -116,3 +116,17 @@ test('a title cut short in the snippet leaves nothing under it', async () => {
 	const { results } = await memos.searchProviders.memos.query({ config: config('t-snip'), query: 'long', limit: 10, fetch });
 	assert.equal(results[0].subtitle, 'Sep 3, 2026');
 });
+
+test('check: Memos out of reach reads as a connection error', async () => {
+	const down = async () => {
+		throw new TypeError('fetch failed');
+	};
+	const res = await memos.actions.check.run({ config: config('t-down'), params: { uid: 'abc123', index: 0, checked: true, text: 'milk' }, fetch: down });
+	assert.deepEqual(res, { ok: false, message: 'Can’t reach Memos. Check the connection.' });
+
+	const slow = async () => {
+		throw new DOMException('timed out', 'TimeoutError');
+	};
+	const late = await memos.actions.check.run({ config: config('t-slow'), params: { uid: 'abc123', index: 0, checked: true, text: 'milk' }, fetch: slow });
+	assert.equal(late.message, 'Can’t reach Memos. Check the connection.');
+});

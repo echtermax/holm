@@ -159,30 +159,43 @@ const adapter = {
 				if (!config?.url || !config?.apiKey || !MEMO_UID.test(uid || '') || !Number.isInteger(index) || index < 0 || typeof checked !== 'boolean') {
 					return { ok: false, message: 'Invalid checklist item' };
 				}
-				const base = stripTrailingSlash(config.url);
-				const memo = await getMemo(base, config, fetch, uid);
-				const task = tasksOf(memo.content)[index];
-				if (!task || !sameTask(task.text, text)) {
-					return { ok: false, message: 'This memo changed in Memos. Go back and open it again.' };
+				try {
+					return await saveTask(stripTrailingSlash(config.url), config, fetch, { uid, index, checked, text });
+				} catch (err) {
+					// No answer at all (down, offline, timed out) reads as a connection
+					// error; an answer Memos gave keeps its own message.
+					if (err?.name === 'TypeError' || err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+						return { ok: false, message: 'Can’t reach Memos. Check the connection.' };
+					}
+					throw err;
 				}
-				if (task.checked === checked) return { ok: true, message: 'Saved' };
-				const { api } = await userOf(base, config, fetch);
-				const res = await fetch(`${base}${api}/memos/${encodeURIComponent(uid)}?updateMask=content`, {
-					method: 'PATCH',
-					headers: { ...authHeaders(config), 'content-type': 'application/json' },
-					body: JSON.stringify({ content: setTask(memo.content, index, checked) })
-				});
-				if (!res.ok) {
-					if (res.status === 401 || res.status === 403) return { ok: false, message: 'Memos refused the change. Check the access token.' };
-					return { ok: false, message: `Memos answered ${res.status}` };
-				}
-				return { ok: true, message: 'Saved' };
 			}
 		}
 	},
 
 	widgets: {}
 };
+
+// Re-reads the memo, then saves task `index` if its line still reads `text`.
+async function saveTask(base, config, fetch, { uid, index, checked, text }) {
+	const memo = await getMemo(base, config, fetch, uid);
+	const task = tasksOf(memo.content)[index];
+	if (!task || !sameTask(task.text, text)) {
+		return { ok: false, message: 'This memo changed in Memos. Go back and open it again.' };
+	}
+	if (task.checked === checked) return { ok: true, message: 'Saved' };
+	const { api } = await userOf(base, config, fetch);
+	const res = await fetch(`${base}${api}/memos/${encodeURIComponent(uid)}?updateMask=content`, {
+		method: 'PATCH',
+		headers: { ...authHeaders(config), 'content-type': 'application/json' },
+		body: JSON.stringify({ content: setTask(memo.content, index, checked) })
+	});
+	if (!res.ok) {
+		if (res.status === 401 || res.status === 403) return { ok: false, message: 'Memos refused the change. Check the access token.' };
+		return { ok: false, message: `Memos answered ${res.status}` };
+	}
+	return { ok: true, message: 'Saved' };
+}
 
 // auth/me on the first API path that has it: /api from 26.10, /api/v1 before.
 async function fetchMe(base, config, fetch) {

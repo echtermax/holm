@@ -48,3 +48,16 @@ export function sameTask(markdownText, shownText) {
 	const plain = (s) => String(s || '').replace(/\]\([^)]*\)/g, ']').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 	return plain(markdownText) === plain(shownText);
 }
+
+/**
+ * Runs the tasks handed to it one after another, each starting once the one
+ * before has settled, and resolves with each task's own result.
+ */
+export function oneAtATime() {
+	let last = Promise.resolve();
+	return (task) => {
+		const run = last.then(task);
+		last = run.catch(() => {});
+		return run;
+	};
+}

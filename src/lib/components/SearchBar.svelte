@@ -15,7 +15,7 @@
 	import { recordOpen, frecencyScores } from '$lib/launcher/frecency.js';
 	import { instantAnswer, isCalculation } from '$lib/launcher/instant.js';
 	import { searchOnFocus } from '$lib/searchOnFocus.js';
-	import { progressOf, setTask } from '$lib/checklist.js';
+	import { oneAtATime, progressOf, setTask } from '$lib/checklist.js';
 	import { searchTransparency, searchGlassLevel, searchHints } from '$lib/searchLook.js';
 
 	const siteConfig = getContext('config');
@@ -461,7 +461,9 @@
 	// A checklist box in the detail view (a memo's): saved through the
 	// integration's action, then shown ticked, with the done counts on the
 	// facts and on the result row following. `taskStates` holds, by box,
-	// 'saving' or the error with what to retry.
+	// 'saving' or the error with what to retry. Saves go one at a time: each
+	// rewrites the whole memo from a fresh read, so two at once would lose one.
+	const nextSave = oneAtATime();
 	async function checkTask(index, checked, text) {
 		const view = detailView;
 		const list = view?.data?.checklist;
@@ -474,8 +476,11 @@
 			detailView = { ...detailView, taskStates: states };
 		};
 		setState('saving');
-		const res = await integrationsStore.runAction(view.p.integrationId, list.key, { ...list.params, index, checked, text });
-		if (seq !== detailSeq) return;
+		// Holm itself out of reach (offline) is a connection error too.
+		const res = await nextSave(() =>
+			seq === detailSeq ? integrationsStore.runAction(view.p.integrationId, list.key, { ...list.params, index, checked, text }) : null
+		).catch(() => ({ ok: false, message: 'Can’t reach Holm. Check your connection.' }));
+		if (seq !== detailSeq || !res) return;
 		if (!res.ok) {
 			setState({ error: res.message, checked, text });
 			return;
