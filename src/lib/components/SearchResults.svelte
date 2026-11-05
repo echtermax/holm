@@ -1,4 +1,5 @@
 <script>
+	import { marked } from 'marked';
 	import AppIcon from './AppIcon.svelte';
 	import Keys from './Keys.svelte';
 
@@ -19,6 +20,7 @@
 		emptyText = '',
 		detail = null,
 		ondetailclose = () => {},
+		ontaskcheck = () => {},
 		onselect = () => {},
 		onrun = () => {},
 		onaction = () => {},
@@ -120,6 +122,89 @@
 		node.addEventListener('animationend', done);
 	}
 
+	// Kinds whose detail view is compact (an icon, not a poster), also while loading.
+	const COMPACT = new Set(['event', 'document', 'card']);
+
+	// A memo's Markdown or a work item's HTML, sanitized in the browser (on the
+	// server, DOMPurify runs on jsdom, which leaks per call). Links open in a
+	// new tab; images without an absolute address (Plane's own assets) go.
+	// With `checklist`, the boxes are live: a change asks `ontoggle`, the box
+	// stays as saved until the Markdown says otherwise, and `states` marks a
+	// box saving (a spinner in its place) or failed (an error with Retry).
+	function richText(node, opts) {
+		let o = opts;
+		let purify;
+		let shown;
+		const boxes = () => [...node.querySelectorAll('input[type=checkbox]')];
+		const textOf = (li) => {
+			const copy = li.cloneNode(true);
+			copy.querySelectorAll('ul, ol, .launcher-check-error').forEach((n) => n.remove());
+			return copy.textContent.trim();
+		};
+		function paint() {
+			if (!purify) return;
+			const source = o.markdown != null ? marked.parse(o.markdown, { gfm: true, breaks: true }) : o.html || '';
+			if (source !== shown) {
+				shown = source;
+				node.innerHTML = purify.sanitize(source);
+				node.querySelectorAll('a[href]').forEach((a) => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
+				node.querySelectorAll('img').forEach((img) => { if (!/^https?:\/\//.test(img.getAttribute('src') || '')) img.remove(); });
+			}
+			node.querySelectorAll('.launcher-check-spin, .launcher-check-error').forEach((n) => n.remove());
+			boxes().forEach((box, i) => {
+				const li = box.closest('li');
+				box.disabled = !o.checklist;
+				if (!li) return;
+				li.classList.remove('is-saving', 'is-error');
+				box.setAttribute('aria-label', textOf(li));
+				const st = o.states?.[i];
+				if (st === 'saving') {
+					li.classList.add('is-saving');
+					box.insertAdjacentHTML('beforebegin', '<span class="launcher-check-spin" role="status" aria-label="Saving"></span>');
+				} else if (st?.error) {
+					li.classList.add('is-error');
+					const err = document.createElement('span');
+					err.className = 'launcher-check-error';
+					err.setAttribute('role', 'alert');
+					err.textContent = `Couldn’t save. ${st.error} `;
+					const retry = document.createElement('button');
+					retry.type = 'button';
+					retry.textContent = 'Retry';
+					retry.dataset.retry = String(i);
+					err.append(retry);
+					li.append(err);
+				}
+			});
+		}
+		function onchange(e) {
+			const box = e.target;
+			const i = boxes().indexOf(box);
+			if (i < 0 || !o.checklist) return;
+			const checked = box.checked;
+			box.checked = !checked; // stays as saved until the save lands
+			o.ontoggle(i, checked, textOf(box.closest('li')));
+		}
+		function onclick(e) {
+			const retry = e.target.closest?.('[data-retry]');
+			const st = retry && o.states?.[Number(retry.dataset.retry)];
+			if (st?.error) o.ontoggle(Number(retry.dataset.retry), st.checked, st.text);
+		}
+		// Focus stays in the search input, as for every other button here.
+		const keepFocus = (e) => { if (e.target.closest?.('input, button')) e.preventDefault(); };
+		node.addEventListener('change', onchange);
+		node.addEventListener('click', onclick);
+		node.addEventListener('mousedown', keepFocus);
+		import('isomorphic-dompurify').then(({ default: DOMPurify }) => { purify = DOMPurify; paint(); });
+		return {
+			update(next) { o = next; paint(); },
+			destroy() {
+				node.removeEventListener('change', onchange);
+				node.removeEventListener('click', onclick);
+				node.removeEventListener('mousedown', keepFocus);
+			}
+		};
+	}
+
 	// Request → Requested pops once, when the request lands; a title that was
 	// already requested opens without it.
 	function landed(node, done) {
@@ -144,7 +229,7 @@
 		<div class="launcher-scroll launcher-detail" role="region" aria-label="Details for {detail.title}">
 			<!-- An event never has a backdrop, so it gets the short hero while loading
 			     too, rather than a movie-sized one that collapses when it lands. -->
-			<div class="launcher-detail-hero" class:is-empty={!detail.data?.backdrop && (!detail.loading || detail.r?.meta?.kind === 'event')}>
+			<div class="launcher-detail-hero" class:is-empty={!detail.data?.backdrop && (!detail.loading || COMPACT.has(detail.r?.meta?.kind))}>
 				{#if detail.data?.backdrop}
 					<img class="launcher-detail-backdrop is-loading" use:thumbLoading src={detail.data.backdrop} alt="" referrerpolicy="no-referrer" onerror={thumbFailed} />
 				{/if}
@@ -153,9 +238,9 @@
 					Results
 				</button>
 			</div>
-			<!-- An event is compact: its icon, then title and facts, with the buttons on the right. -->
-			<div class="launcher-detail-body" class:is-compact={!detail.thumbnail && detail.r?.meta?.kind === 'event'}>
-				<div class="launcher-detail-poster launcher-thumb-wrap" class:is-icon={!detail.thumbnail && detail.r?.meta?.kind === 'event'} style:color={detail.r?.meta?.color}>
+			<!-- An event, memo or work item is compact: its icon, then title and facts, with the buttons on the right. -->
+			<div class="launcher-detail-body" class:is-compact={!detail.thumbnail && COMPACT.has(detail.r?.meta?.kind)}>
+				<div class="launcher-detail-poster launcher-thumb-wrap" class:is-icon={!detail.thumbnail && COMPACT.has(detail.r?.meta?.kind)} style:color={detail.r?.meta?.color}>
 					{#if detail.thumbnail}
 						<img class="is-loading" use:thumbLoading src={detail.thumbnail} alt="" referrerpolicy="no-referrer" onerror={thumbFailed} />
 					{/if}
@@ -167,6 +252,7 @@
 						{#if detail.data}
 							<div class="launcher-detail-facts">
 								{#each detail.data.facts || [] as fact}<span>{fact}</span>{/each}
+								{#if detail.data.pinned}<span class="launcher-detail-pinned"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>Pinned</span>{/if}
 								{#if detail.data.rating}
 									<span class="launcher-detail-rating">
 										<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>
@@ -217,6 +303,26 @@
 			{:else if detail.error}
 				<div class="launcher-error">{detail.error}</div>
 			{:else if detail.data}
+				{#if detail.data.fields?.length}
+					<dl class="launcher-detail-fields">
+						{#each detail.data.fields as f}
+							<dt>{f.label}</dt>
+							<dd>
+								{#if f.chips}
+									{#each f.chips as c}<span class="launcher-field-chip">{#if c.color}<i style:background={c.color}></i>{/if}{#if c.initials}<b>{c.initials}</b>{/if}{c.text}</span>{/each}
+								{:else}
+									<span class="launcher-field-value" class:is-warn={f.warn}>{#if f.color}<i style:background={f.color}></i>{/if}{f.value}</span>
+								{/if}
+							</dd>
+						{/each}
+					</dl>
+				{/if}
+				{#if detail.data.markdown || detail.data.html}
+					<div
+						class="launcher-detail-md"
+						use:richText={{ markdown: detail.data.markdown ?? null, html: detail.data.html, checklist: !!detail.data.checklist, states: detail.taskStates, ontoggle: ontaskcheck }}
+					></div>
+				{/if}
 				<div class="launcher-detail-text">
 					{#if detail.data.tagline}<p class="launcher-detail-tagline">{detail.data.tagline}</p>{/if}
 					{#if detail.data.overview}<p>{#each linkParts(detail.data.overview) as part}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.href}</a>{:else}{part.text}{/if}{/each}</p>{/if}
@@ -397,6 +503,7 @@
 										<span class="launcher-title">{item.title}</span>
 										{#if item.subtitle}<span class="launcher-subtitle">{item.subtitle}</span>{/if}
 									</span>
+									{#if item.progress}<span class="launcher-progress" class:is-done={item.progress.done === item.progress.total}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>{item.progress.done}/{item.progress.total} done</span>{/if}
 									{#if item.tags?.length}
 										<span class="launcher-tags">
 											{#each item.tags.slice(0, 3) as tag}<span class="launcher-tag">{tag}</span>{/each}

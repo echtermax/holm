@@ -10,6 +10,8 @@ to the version and date.
 
 ## Unreleased
 
+- **New:** Open Memos notes and Plane work items in place; tick memo checklists from Holm. ([#127](https://github.com/man15h/holm/pull/127))
+
 ## 0.11.0 — 2026-10-25
 
 - **New:** Health check widgets built into apps, supporting Kener, Uptime Kuma, Gatus and Cachet. ([#114](https://github.com/man15h/holm/pull/114))

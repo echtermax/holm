@@ -123,8 +123,8 @@ What Holm deliberately leaves out: server stats, container health, uptime widget
 | Kavita | Manga, comics and book series |
 | Papra | Documents, by name and content |
 | Thingport | 3D models; under `!tp`, collections and tags too |
-| Memos | Your own memos (Memos 0.26 or later) |
-| Plane | Work items, by title or ID |
+| Memos | Your own memos, opened in full with live checklists (Memos 0.26 or later) |
+| Plane | Work items, by title or ID, opened with state, assignees and description |
 | Invidious | YouTube videos, from the Invidious server set in `config.yml`; no sign-in |
 
 **App health** is a health check built into each app tile, supporting Kener, Uptime Kuma, Gatus and Cachet, or a plain URL check; see [App health](docs/configuration.md#app-health).

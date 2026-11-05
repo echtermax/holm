@@ -15,6 +15,7 @@
 	import { recordOpen, frecencyScores } from '$lib/launcher/frecency.js';
 	import { instantAnswer, isCalculation } from '$lib/launcher/instant.js';
 	import { searchOnFocus } from '$lib/searchOnFocus.js';
+	import { progressOf, setTask } from '$lib/checklist.js';
 	import { searchTransparency, searchGlassLevel, searchHints } from '$lib/searchLook.js';
 
 	const siteConfig = getContext('config');
@@ -457,6 +458,36 @@
 		detailView = null;
 	}
 
+	// A checklist box in the detail view (a memo's): saved through the
+	// integration's action, then shown ticked, with the done counts on the
+	// facts and on the result row following. `taskStates` holds, by box,
+	// 'saving' or the error with what to retry.
+	async function checkTask(index, checked, text) {
+		const view = detailView;
+		const list = view?.data?.checklist;
+		if (!list || view.taskStates?.[index] === 'saving') return;
+		const seq = detailSeq;
+		const setState = (st) => {
+			const states = { ...detailView.taskStates };
+			if (st) states[index] = st;
+			else delete states[index];
+			detailView = { ...detailView, taskStates: states };
+		};
+		setState('saving');
+		const res = await integrationsStore.runAction(view.p.integrationId, list.key, { ...list.params, index, checked, text });
+		if (seq !== detailSeq) return;
+		if (!res.ok) {
+			setState({ error: res.message, checked, text });
+			return;
+		}
+		const markdown = setTask(detailView.data.markdown, index, checked) ?? detailView.data.markdown;
+		const progress = progressOf(markdown);
+		const facts = (detailView.data.facts || []).map((f) => (progress && /^\d+ of \d+ done$/.test(f) ? `${progress.done} of ${progress.total} done` : f));
+		if (detailView.r.meta) detailView.r.meta.progress = progress;
+		detailView = { ...detailView, data: { ...detailView.data, markdown, facts } };
+		setState(null);
+	}
+
 	// "Play on Jellyfin": Seerr says which server it plays from; a Jellyfin or
 	// Plex result plays on itself. The button wears the accent, like the poster ▶.
 	function openOn(p, r) {
@@ -695,6 +726,7 @@
 						tmdb: r.meta?.tmdb,
 						source: layout === 'poster' ? sourceOf(p, r) : null,
 						tags: r.tags,
+						progress: r.meta?.progress,
 						accessory: layout === 'list' ? p.integrationName : '',
 						actions: r.filter ? filterActions(key, p, r) : resultActions(key, p, r)
 					};
@@ -1110,6 +1142,7 @@
 			{emptyText}
 			{detail}
 			ondetailclose={() => { closeDetail(); inputEl?.focus(); }}
+			ontaskcheck={checkTask}
 			onselect={(k) => { selectedKey = k; userMoved = true; }}
 			onrun={runItem}
 			onaction={(item, action) => { panelOpen = false; action.run(); }}
