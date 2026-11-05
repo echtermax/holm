@@ -8,7 +8,7 @@ twelve words, ending with a link to its PR. Each pull request into `dev` adds
 its line under `## Unreleased`; the release pull request renames that heading
 to the version and date.
 
-## Unreleased
+## 0.12.0 — 2026-11-05
 
 - **New:** Search YouTube with `!yt` through an Invidious server. ([#125](https://github.com/man15h/holm/pull/125))
 - **New:** Search GitHub and Gitea repos, issues and PRs; `!gh` and `!gt` split them into sections. ([#123](https://github.com/man15h/holm/pull/123))
