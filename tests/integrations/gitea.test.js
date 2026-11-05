@@ -53,6 +53,7 @@ test('Gitea sections split issues from PRs with GitHub\'s chips, from one issue 
 	assert.deepEqual(issues.results.map((r) => [r.title, r.meta.status]), [['Garden: water the beans', 'Open'], ['Garden: compost', 'Closed']]);
 	assert.deepEqual(pulls.results.map((r) => [r.title, r.meta.status]), [['Garden: add a rain gauge', 'Merged'], ['Garden: fix the fence', 'Closed']]);
 	assert.equal(pulls.results[0].subtitle.split(' · ')[0], 'sam-rivera/garden#5');
+	assert.deepEqual([...issues.results, ...pulls.results].map((r) => r.meta.kind), ['issue', 'issue-closed', 'pr-merged', 'pr-closed']);
 	assert.equal(pulls.more, 'https://gitea.example.com/pulls?q=garden&state=all');
 	assert.equal(calls.filter((c) => c.path === '/api/v1/repos/issues/search').length, 1);
 	assert.equal(calls[0].search.get('state'), 'all');

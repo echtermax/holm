@@ -13,6 +13,8 @@
 // feeds the summary and both issue sections from a short cache, and repos
 // are searched as typed.
 
+import { STATE_COLORS, issueKind } from './forge.js';
+
 const issueCache = new Map(); // url + token + query → { items, expiresAt }
 const ISSUE_CACHE_TTL_MS = 60_000;
 const MAX_ISSUE_CACHE_ENTRIES = 200;
@@ -149,7 +151,7 @@ function repoRow(r) {
 			.join(' · ')
 			.slice(0, 120),
 		href: r.html_url,
-		meta: { kind: 'collection', status: r.private ? 'Private' : r.archived ? 'Archived' : '' }
+		meta: { kind: 'repo', status: r.private ? 'Private' : r.archived ? 'Archived' : '' }
 	};
 }
 
@@ -159,9 +161,9 @@ function issueRow(it) {
 	return {
 		id: `issue:${it.id}`,
 		title: it.title,
-		subtitle: [`${it.repository?.full_name || ''}#${it.number}`, pr ? 'Pull request' : 'Issue', `updated ${shortDate(it.updated_at)}`].join(' · '),
+		subtitle: [`${it.repository?.full_name || ''}#${it.number}`, `updated ${shortDate(it.updated_at)}`].join(' · '),
 		href: it.html_url,
-		meta: { kind: 'card', status }
+		meta: { kind: issueKind(!!pr, status), color: STATE_COLORS[status], status }
 	};
 }
 

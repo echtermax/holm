@@ -19,6 +19,8 @@
 // from a short cache, and no more go out until the limit resets once GitHub
 // says it is used up.
 
+import { STATE_COLORS, issueKind } from './forge.js';
+
 const API = 'https://api.github.com';
 const WEB = 'https://github.com';
 
@@ -168,7 +170,7 @@ function repoRow(r) {
 			.join(' · ')
 			.slice(0, 120),
 		href: r.html_url,
-		meta: { kind: 'collection', status: r.private ? 'Private' : r.archived ? 'Archived' : '' }
+		meta: { kind: 'repo', status: r.private ? 'Private' : r.archived ? 'Archived' : '' }
 	};
 }
 
@@ -179,9 +181,9 @@ function issueRow(it) {
 	return {
 		id: `issue:${it.id}`,
 		title: it.title,
-		subtitle: [`${repo}#${it.number}`, pr ? 'Pull request' : 'Issue', `updated ${shortDate(it.updated_at)}`].join(' · '),
+		subtitle: [`${repo}#${it.number}`, `updated ${shortDate(it.updated_at)}`].join(' · '),
 		href: it.html_url,
-		meta: { kind: 'card', status }
+		meta: { kind: issueKind(!!pr, status), color: STATE_COLORS[status], status }
 	};
 }
 
