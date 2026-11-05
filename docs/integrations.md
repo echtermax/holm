@@ -52,7 +52,7 @@ The key (`immich`) must match the adapter id. If an app in `apps:` has the same 
 
 **Set `default_url` for every integration.** The server then uses that URL for every user, whatever the browser sends, including for connections saved before it was set. Without it, users may enter any `http:` or `https:` URL, and Holm, not the browser, makes the requests, so it can reach hosts inside your network; Holm logs a warning at startup for each integration without one. An app's `groups:` don't apply to its integration: every enabled integration is listed to every signed-in user.
 
-**Invidious is shared.** It searches YouTube through one Invidious server for everyone, with no account, so there is nothing for users to connect: Settings shows it as "Set by your admin" and Connected, with no form or menu. It stays hidden until `default_url` is set:
+**Invidious is shared.** It searches YouTube through one Invidious server for everyone, with no account, so there is nothing for users to connect: Settings shows it as "Set by your admin" and Connected, with no connect form; its ⋯ menu has only **Settings**, which opens the Search provider switch so each user can leave YouTube out of their search. It stays hidden until `default_url` is set:
 
 ```yaml
 integrations:

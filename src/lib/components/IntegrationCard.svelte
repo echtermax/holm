@@ -343,7 +343,6 @@
 					</span>
 				{/if}
 				<span class="text-[0.7rem] font-mono text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-400/30 bg-emerald-500/5">Connected</span>
-				{#if !integration.operatorNote}
 				<div class="relative" bind:this={menuEl}>
 					<button
 						class="w-7 h-7 rounded-lg border border-border-card bg-transparent text-content-dim cursor-pointer hover:text-content hover:bg-surface-card-hover transition-colors flex items-center justify-center"
@@ -358,6 +357,13 @@
 						<!-- Solid, not glass: inside the Configure modal's own backdrop blur
 						     a second blur doesn't apply, so a glass menu shows the rows under it. -->
 						<div class="absolute right-0 {menuUp ? 'bottom-full mb-1' : 'top-full mt-1'} bg-surface-modal border border-border-card rounded-lg shadow-theme z-50 min-w-[140px] py-1">
+							{#if integration.operatorNote}
+							<!-- Shared (Invidious): nothing to connect, so Settings only opens Use for. -->
+							<button
+								class="w-full px-3 py-1.5 text-left text-[0.75rem] text-content-muted bg-transparent border-none cursor-pointer hover:bg-surface-card-hover transition-colors"
+								onclick={editConnection}
+							>Settings</button>
+							{:else}
 							<button
 								class="w-full px-3 py-1.5 text-left text-[0.75rem] text-content-muted bg-transparent border-none cursor-pointer hover:bg-surface-card-hover transition-colors"
 								onclick={editConnection}
@@ -366,10 +372,10 @@
 								class="w-full px-3 py-1.5 text-left text-[0.75rem] text-red-400/80 bg-transparent border-none cursor-pointer hover:bg-surface-card-hover transition-colors"
 								onclick={runDisconnect}
 							>Disconnect</button>
+							{/if}
 						</div>
 					{/if}
 				</div>
-				{/if}
 			{:else}
 				<button
 					class="text-[0.7rem] font-mono text-content-dim px-2.5 py-1 rounded-lg border border-border-card bg-transparent cursor-pointer hover:text-content hover:bg-surface-card-hover transition-colors"
@@ -524,7 +530,9 @@
 					{/if}
 				</div>
 			{/snippet}
-			{#if connected && integration.multiAccount}
+			{#if integration.operatorNote}
+				<!-- Shared: no connect form, only Use for below. -->
+			{:else if connected && integration.multiAccount}
 				<IntegrationAccounts {integration} main={mainForm} />
 			{:else}
 				{@render mainForm()}
@@ -532,7 +540,7 @@
 
 			<!-- Surface toggles -->
 			{#if connected}
-				<div class="space-y-2 pt-2 border-t border-border-card">
+				<div class="space-y-2 {integration.operatorNote ? '' : 'pt-2 border-t border-border-card'}">
 					<div class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-content-dim">Use for</div>
 					{#if hasSearch}
 						<button

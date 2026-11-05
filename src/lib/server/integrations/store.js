@@ -7,20 +7,11 @@ import {
 import { encryptConfig, decryptConfig } from '../secrets.js';
 import { getAdapter, getOperatorDefaults, getRegistry } from './index.js';
 import { applyOperatorUrls } from './urlPolicy.js';
+import { parseSurfaces, sharedConnection } from './shared.js';
 
 // Wraps user_integrations row access with transparent encryption / decryption.
 // Callers always deal in plain JS objects; the encrypted blob never leaves
 // this module.
-
-function parseSurfaces(json) {
-	if (!json) return {};
-	try {
-		const obj = JSON.parse(json);
-		return obj && typeof obj === 'object' ? obj : {};
-	} catch {
-		return {};
-	}
-}
 
 function rowToConnection(row) {
 	if (!row) return null;
@@ -46,32 +37,24 @@ function withOperatorUrls(id, config) {
 	return out;
 }
 
-// A shared integration (Invidious) is the operator's, the same for everyone:
-// every user is connected to the URL in config.yml, and nothing is stored.
-function sharedConnection(integrationId) {
+// A shared integration's config is the operator's; its row holds only the
+// user's switches.
+function shared(integrationId, row) {
 	const adapter = getAdapter(integrationId);
 	if (!adapter?.shared) return null;
-	return {
-		integrationId,
-		connected: true,
-		config: applyOperatorUrls(adapter, getOperatorDefaults(integrationId), {}),
-		surfaces: { search: true },
-		updatedAt: null
-	};
+	return sharedConnection(adapter, getOperatorDefaults(integrationId), row);
 }
 
 export async function getConnection(username, integrationId) {
-	const shared = sharedConnection(integrationId);
-	if (shared) return shared;
 	const row = await getIntegrationRow(username, integrationId);
-	return rowToConnection(row);
+	return shared(integrationId, row) || rowToConnection(row);
 }
 
 export async function listConnections(username) {
 	const rows = await listIntegrationRows(username);
 	const out = rows.map(rowToConnection).filter((c) => !getAdapter(c.integrationId)?.shared);
 	for (const { adapter } of getRegistry()) {
-		if (adapter.shared) out.push(sharedConnection(adapter.id));
+		if (adapter.shared) out.push(shared(adapter.id, rows.find((r) => r.integration_id === adapter.id)));
 	}
 	return out;
 }

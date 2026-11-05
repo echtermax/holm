@@ -162,7 +162,7 @@
  * @property {Record<string, SearchProvider>} [searchProviders]
  * @property {Record<string, ProxyHandler>} [proxy]            Optional proxy handlers keyed by name (e.g. 'thumbnail')
  * @property {Record<string, { label: string, description?: string }>} [widgets]  Widgets behind the `widgets` surface, e.g. Navidrome's player; the user's switch is `surfaces.widgets`
- * @property {boolean} [shared]  The operator's, not the user's: every user is connected to the URL in config.yml (`fromOperatorDefault` fields), with nothing to connect or store; hidden until the operator sets `default_url`
+ * @property {boolean} [shared]  The operator's, not the user's: every user is connected to the URL in config.yml (`fromOperatorDefault` fields), with nothing to connect; only the user's Use for switches are stored; hidden until the operator sets `default_url`
  * @property {boolean} [multiAccount]  The user can add more accounts under the first (up to 5), stored as `config.accounts`: each a config of the same schema plus an `id`, checked and redacted like the first. The adapter reads them all (see accountsOf in caldav.js)
  * @property {boolean} [widgetsOnConnect]  Turn the widgets switch on when the user first connects (where the operator allows widgets); otherwise it starts off
  * @property {(ctx: { config: object, fetch: typeof fetch, timeZone: string }) => Promise<Reminder[]>} [reminders]  Reminders due in the next day, or already due for an event not yet over, for GET /api/reminders; asked only while the user's widgets switch is on

@@ -44,8 +44,8 @@ export function adapterToClient(adapter, { icon, name, tip, shortcut } = {}) {
 			description: w.description || ''
 		})),
 		widgetsOnConnect: !!adapter.widgetsOnConnect,
-		// Shared integrations have nothing for the user to set: Settings shows
-		// this line where the connect form and the options menu would be.
+		// Shared integrations have nothing for the user to connect: Settings
+		// shows this line, and their ⋯ menu opens only the Use for switches.
 		operatorNote: adapter.shared ? 'Set by your admin' : null,
 		multiAccount: !!adapter.multiAccount
 	};
