@@ -27,6 +27,8 @@ Holm has two kinds of app support.
 | Kavita | Manga, comics and book series | URL + Auth Key (Kavita 0.8.9 or later) | `!kavita` |
 | Papra | Documents, by name and content | URL + read-only API token + organization ID | `!papra` |
 | Thingport | 3D models; under `!tp`, collections and tags too; "More" opens Thingport's results page | URL + API token | `!tp` |
+| Memos | The user's own memos (full text), with tags, date and checklist progress; a memo opens in full, and its checklist boxes tick from Holm | URL + access token (Memos 0.26 or later, 26.10's `/api` included) | `!memo` |
+| Plane | Work items, by title or ID (`WEB-42`), across the workspace's projects; a work item opens with its state, priority, assignees, labels, due date and description | URL + workspace + API key (Plane 1.1 or later) | `!plane` |
 | Invidious | YouTube videos, in a row of 16:9 tiles under the posters; Enter opens the video on the Invidious server | Nothing: shared, set by the operator | `!yt` |
 
 Integrations are marked Alpha in the UI. The widgets so far are Navidrome's player and the Calendar's reminders and upcoming events.

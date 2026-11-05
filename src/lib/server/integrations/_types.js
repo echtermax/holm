@@ -50,6 +50,7 @@
  * @property {string} [meta.status]             Short badge, e.g. 'Available'
  * @property {string} [meta.tmdb]               '<movie|tv>:<tmdb id>' — identifies the title across providers
  * @property {{ title: string, artist?: string, duration?: number, stream: string, cover?: string }} [meta.track]  A song Holm can play itself: `stream` is a proxy URL for the audio, `duration` in seconds
+ * @property {{ done: number, total: number } | null} [meta.progress]  A checklist's ticked and total boxes, shown on the row as 'N/M done'
  * @property {boolean} [meta.merge]             This result stands for its title: other providers' results with the same `meta.tmdb` are hidden
  */
 
@@ -157,7 +158,7 @@
  * @property {(ctx: { config: object, linked: Record<string, object>, fetch: typeof fetch }) => Promise<object|{ error: string }|null>} [connectFromLinked]  Connects the user without asking, from a linked connection; returns the config to save, null to fall back to `signIn`, or `{ error }` when a code would fail the same way
  * @property {(ctx: { config: object, fetch: typeof fetch }) => Promise<string[]>} [linkedVia]  Which of `linkedTo` can sign in at the operator's URL (Seerr: the server it runs on), for the cards' wording
  * @property {Record<string, Action>} [actions]             Writes triggered from search results
- * @property {(ctx: AdapterContext & { params: object }) => Promise<{ title: string, facts?: string[], rating?: number|null, genres?: string[], tagline?: string, overview?: string, cast?: string[], thumbnail?: string, backdrop?: string, link?: { label: string, href: string } | null } | null>} [details]  Detail view for a result's `detail` params; null when they're invalid
+ * @property {(ctx: AdapterContext & { params: object }) => Promise<{ title: string, facts?: string[], rating?: number|null, genres?: string[], tagline?: string, overview?: string, cast?: string[], thumbnail?: string, backdrop?: string, link?: { label: string, href: string } | null, pinned?: boolean, fields?: { label: string, value?: string, color?: string, warn?: boolean, chips?: { text: string, color?: string, initials?: string }[] }[], markdown?: string, html?: string, checklist?: { key: string, params: object } } | null>} [details]  Detail view for a result's `detail` params; null when they're invalid. `fields` is a label/value grid (a work item's state, assignees); `markdown` or `html` is a body the browser sanitizes; with `checklist`, its task boxes are live and a tick runs `actions[key]` with `params` plus `{ index, checked, text }`
  * @property {(ctx: { config: object }) => object} [prepareConfig]  Rewrites the merged config just before it is saved, e.g. swapping a password for a derived token
  * @property {Record<string, SearchProvider>} [searchProviders]
  * @property {Record<string, ProxyHandler>} [proxy]            Optional proxy handlers keyed by name (e.g. 'thumbnail')
