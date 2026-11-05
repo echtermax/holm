@@ -14,7 +14,7 @@ to the version and date.
 
 ## 0.12.0 — 2026-11-05
 
-- **New:** Search YouTube with `!yt` through an Invidious server. ([#125](https://github.com/man15h/holm/pull/125))
+- **New:** Invidious integration: search YouTube with `!yt` through a self-hosted or external Invidious server. ([#125](https://github.com/man15h/holm/pull/125))
 - **New:** Search GitHub and Gitea repos, issues and PRs; `!gh` and `!gt` split them into sections. ([#123](https://github.com/man15h/holm/pull/123))
 - **New:** Search Memos and Plane, open results in place, tick memo checklists. ([#122](https://github.com/man15h/holm/pull/122), [#127](https://github.com/man15h/holm/pull/127))
 - **New:** Play Navidrome albums and playlists in the corner player, with Shuffle. ([#126](https://github.com/man15h/holm/pull/126))
