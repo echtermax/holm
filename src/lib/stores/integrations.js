@@ -141,6 +141,18 @@ function createIntegrationsStore() {
 		return data.details;
 	}
 
+	// The tracks of a search result that carries `meta.queue` params.
+	async function queue(integrationId, params) {
+		const res = await fetch(`/api/integrations/${encodeURIComponent(integrationId)}/queue`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ params })
+		});
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok || !Array.isArray(data.tracks)) throw new Error(data.error || `HTTP ${res.status}`);
+		return data.tracks;
+	}
+
 	return {
 		subscribe: state.subscribe,
 		load,
@@ -149,7 +161,8 @@ function createIntegrationsStore() {
 		test,
 		signIn,
 		runAction,
-		details
+		details,
+		queue
 	};
 }
 

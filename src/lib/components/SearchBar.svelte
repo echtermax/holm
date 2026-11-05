@@ -2,7 +2,7 @@
 	import { onMount, getContext, untrack, tick } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { integrations as integrationsStore } from '$lib/stores/integrations.js';
-	import { nowPlaying } from '$lib/stores/player.js';
+	import { playTrack as startTrack, playQueue } from '$lib/stores/player.js';
 	import { prefs } from '$lib/stores/prefs.js';
 	import { resolveIcon } from '$lib/apps.js';
 	import SearchResults from './SearchResults.svelte';
@@ -15,6 +15,7 @@
 	import { recordOpen, frecencyScores } from '$lib/launcher/frecency.js';
 	import { instantAnswer, isCalculation } from '$lib/launcher/instant.js';
 	import { searchOnFocus } from '$lib/searchOnFocus.js';
+	import { oneAtATime, progressOf, setTask } from '$lib/checklist.js';
 	import { searchTransparency, searchGlassLevel, searchHints } from '$lib/searchLook.js';
 
 	const siteConfig = getContext('config');
@@ -73,8 +74,9 @@
 	// There is no provider switcher. The form's submit target is the
 	// configured web search (Enter key fires it in a new tab). Every
 	// connected integration that exposes inline-mode search providers
-	// AND has the user's `surfaces.search` toggle on runs automatically
-	// on every keystroke; results land in the dropdown below the bar.
+	// runs automatically on every keystroke; results land in the dropdown
+	// below the bar. With the user's `surfaces.search` toggle off, an app
+	// sits out plain search but still answers its own `!` scope.
 	//
 	// This matches the iPhone Spotlight model: one box, one experience,
 	// no clicks to switch contexts.
@@ -83,7 +85,6 @@
 		const out = [];
 		for (const it of $integrationsStore.integrations) {
 			if (!it.userState?.connected) continue;
-			if (it.userState?.surfaces?.search === false) continue;
 			if (!(it.availableSurfaces || []).includes('search')) continue;
 			for (const [key, prov] of Object.entries(it.searchProviders || {})) {
 				if (prov.mode !== 'inline') continue;
@@ -98,7 +99,10 @@
 					layout: prov.layout,
 					shelf: prov.shelf,
 					scoped: prov.scoped,
+					plainOnly: prov.plainOnly,
+					searchOff: it.userState?.surfaces?.search === false,
 					filters: prov.filters,
+					delay: prov.delay,
 					// Navidrome's player widget: songs play in Holm instead of opening.
 					player: it.userState?.surfaces?.widgets === true && (it.availableSurfaces || []).includes('widgets'),
 					// The Calendar's CalDAV URL is no page to browse; its web address is.
@@ -187,14 +191,15 @@
 	// providers in the future render as separate sections in the dropdown.
 	let providerResults = $state({}); // providerId → { results, loading, error }
 	let inlineOpen = $state(false);
-	let debounceTimer = null;
+	let debounceTimers = [];
 	let lastDispatched = '';
 	let searchAbort = null;
 
 	// Drop any pending or in-flight provider search so a slower, older
 	// response can't land under a newer query.
 	function cancelSearch() {
-		clearTimeout(debounceTimer);
+		for (const timer of debounceTimers) clearTimeout(timer);
+		debounceTimers = [];
 		searchAbort?.abort();
 		searchAbort = null;
 		lastDispatched = '';
@@ -285,6 +290,10 @@
 	// we still don't want a Planka cards fetch on "p".
 	const MIN_REMOTE_QUERY_LENGTH = 3;
 
+	// A provider is asked this long after the last keystroke, or later if it
+	// sets its own `delay` (GitHub's search allows 30 requests a minute).
+	const SEARCH_DELAY_MS = 250;
+
 	// Inside a picked filter an empty query lists what's in it.
 	function dispatchSearch(q, providers, filter) {
 		cancelSearch();
@@ -293,14 +302,24 @@
 			providerResults = {};
 			return;
 		}
-		debounceTimer = setTimeout(() => {
-			const key = filter ? `${JSON.stringify(filter.params)}\n${trimmed}` : trimmed;
-			lastDispatched = key;
-			searchAbort = new AbortController();
-			for (const provider of providers) {
-				fireOneProvider(provider, trimmed, searchAbort.signal, key, filter);
-			}
-		}, 250);
+		const key = filter ? `${JSON.stringify(filter.params)}\n${trimmed}` : trimmed;
+		lastDispatched = key;
+		const abort = (searchAbort = new AbortController());
+		// Marked loading now, not when its timer fires: a provider with a longer
+		// delay still shows the last query's rows meanwhile, and the progress
+		// bar says they are about to change. Untracked: this runs inside the
+		// query effect, which must not depend on the results it writes.
+		untrack(() => {
+			providerResults = {
+				...providerResults,
+				...Object.fromEntries(providers.map((p) => [p.providerId, { ...(providerResults[p.providerId] || {}), loading: true, error: '' }]))
+			};
+		});
+		for (const provider of providers) {
+			debounceTimers.push(setTimeout(() => {
+				fireOneProvider(provider, trimmed, abort.signal, key, filter);
+			}, Math.max(provider.delay || 0, SEARCH_DELAY_MS)));
+		}
 	}
 
 	$effect(() => {
@@ -371,14 +390,17 @@
 	// one-off result opens would otherwise evict app history.
 	const noteOpen = (key) => { if (key.startsWith('app:')) recordOpen(key); };
 
-	function linkActions(key, url, newTabFirst, openLabel = 'Open') {
-		const open = { label: openLabel, run: () => { noteOpen(key); openUrl(url, newTabFirst); finish(); } };
+	// A single result opens and leaves the list where it was, so the next one
+	// is a click away; launching an app, "More in …" and the web search close it.
+	function linkActions(key, url, newTabFirst, openLabel = 'Open', close = true) {
+		const done = close ? finish : () => {};
+		const open = { label: openLabel, run: () => { noteOpen(key); openUrl(url, newTabFirst); done(); } };
 		const other = {
 			label: newTabFirst ? 'Open in this tab' : 'Open in new tab',
 			hint: '⌘ ↵',
-			run: () => { noteOpen(key); openUrl(url, !newTabFirst); finish(); }
+			run: () => { noteOpen(key); openUrl(url, !newTabFirst); done(); }
 		};
-		const copy = { label: 'Copy link', hint: '⌘ ⇧ C', run: () => { copyText(url); finish(); } };
+		const copy = { label: 'Copy link', hint: '⌘ ⇧ C', run: () => { copyText(url); done(); } };
 		return [open, other, copy];
 	}
 
@@ -407,17 +429,43 @@
 		};
 	}
 
-	// A fresh object each time, so picking the playing song again restarts it.
 	function playTrack(track) {
-		nowPlaying.set({ ...track });
+		startTrack(track);
 		finish();
 	}
 
+	// An album or playlist: fetch its tracks, then play from the first. The
+	// list stays open while they load, and the badge reports a failure.
+	async function playTracks(key, p, r) {
+		if (actionState[key]?.busy) return;
+		actionState = { ...actionState, [key]: { busy: true } };
+		try {
+			const tracks = await integrationsStore.queue(p.integrationId, r.meta.queue);
+			if (!tracks.length) throw new Error('Nothing to play');
+			const cleared = { ...actionState };
+			delete cleared[key];
+			actionState = cleared;
+			playQueue(r.meta.queue.type, tracks);
+			finish();
+		} catch (err) {
+			actionState = { ...actionState, [key]: { ok: false, message: err.message || 'Couldn’t play this' } };
+		}
+	}
+
+	// Playing a result in the corner player, or null when it can't play there.
+	function playerAction(key, p, r) {
+		if (!p.player) return null;
+		if (r.meta?.track) return { run: () => playTrack(r.meta.track) };
+		if (r.meta?.queue) return { run: () => playTracks(key, p, r) };
+		return null;
+	}
+
 	function resultActions(key, p, r) {
-		// With the player widget on, a song plays in the corner player and
-		// opening it in its app moves to second.
-		const play = p.player && r.meta?.track ? [{ label: 'Play', run: () => playTrack(r.meta.track) }] : [];
-		const links = r.href ? linkActions(key, r.href, true, play.length ? `Open in ${p.integrationName}` : r.openLabel || 'Open') : [];
+		// With the player widget on, a song, album or playlist plays in the
+		// corner player and opening it in its app moves to second.
+		const player = playerAction(key, p, r);
+		const play = player ? [{ label: 'Play', run: player.run }] : [];
+		const links = r.href ? linkActions(key, r.href, true, play.length ? `Open in ${p.integrationName}` : r.openLabel || 'Open', false) : [];
 		const extra = resultAction(key, p, r);
 		const all = [...play, ...(extra?.run ? [...links, extra] : links)];
 		return r.detail ? [{ label: 'Show details', run: () => openDetail(key, p, r) }, ...all] : all;
@@ -426,7 +474,7 @@
 	// A tag or list: Enter searches inside it, ⌘↵ opens it in its app.
 	function filterActions(key, p, r) {
 		const inside = { label: `Search in ${r.filter.label}`, run: () => drillIn(p, r) };
-		return [inside, ...(r.href ? linkActions(key, r.href, true, `Open in ${p.integrationName}`) : [])];
+		return [inside, ...(r.href ? linkActions(key, r.href, true, `Open in ${p.integrationName}`, false) : [])];
 	}
 
 	function drillIn(p, r) {
@@ -457,6 +505,41 @@
 		detailView = null;
 	}
 
+	// A checklist box in the detail view (a memo's): saved through the
+	// integration's action, then shown ticked, with the done counts on the
+	// facts and on the result row following. `taskStates` holds, by box,
+	// 'saving' or the error with what to retry. Saves go one at a time: each
+	// rewrites the whole memo from a fresh read, so two at once would lose one.
+	const nextSave = oneAtATime();
+	async function checkTask(index, checked, text) {
+		const view = detailView;
+		const list = view?.data?.checklist;
+		if (!list || view.taskStates?.[index] === 'saving') return;
+		const seq = detailSeq;
+		const setState = (st) => {
+			const states = { ...detailView.taskStates };
+			if (st) states[index] = st;
+			else delete states[index];
+			detailView = { ...detailView, taskStates: states };
+		};
+		setState('saving');
+		// Holm itself out of reach (offline) is a connection error too.
+		const res = await nextSave(() =>
+			seq === detailSeq ? integrationsStore.runAction(view.p.integrationId, list.key, { ...list.params, index, checked, text }) : null
+		).catch(() => ({ ok: false, message: 'Can’t reach Holm. Check your connection.' }));
+		if (seq !== detailSeq || !res) return;
+		if (!res.ok) {
+			setState({ error: res.message, checked, text });
+			return;
+		}
+		const markdown = setTask(detailView.data.markdown, index, checked) ?? detailView.data.markdown;
+		const progress = progressOf(markdown);
+		const facts = (detailView.data.facts || []).map((f) => (progress && /^\d+ of \d+ done$/.test(f) ? `${progress.done} of ${progress.total} done` : f));
+		if (detailView.r.meta) detailView.r.meta.progress = progress;
+		detailView = { ...detailView, data: { ...detailView.data, markdown, facts } };
+		setState(null);
+	}
+
 	// "Play on Jellyfin": Seerr says which server it plays from; a Jellyfin or
 	// Plex result plays on itself. The button wears the accent, like the poster ▶.
 	function openOn(p, r) {
@@ -472,12 +555,12 @@
 		badge: (actionState[detailView.key]?.ok === false && actionState[detailView.key].message) || '',
 		request: resultAction(detailView.key, detailView.p, detailView.r),
 		open: detailView.r.href
-			? { ...openOn(detailView.p, detailView.r), run: () => { openUrl(detailView.r.href, true); finish(); } }
+			? { ...openOn(detailView.p, detailView.r), run: () => openUrl(detailView.r.href, true) }
 			: null,
 		// A link the details bring (an event's video call). The label names
 		// the host, since anyone who sends an invite picks the link.
 		link: detailView.data?.link?.href && /^https:\/\//.test(detailView.data.link.href)
-			? { label: `${detailView.data.link.label || 'Open'} · ${new URL(detailView.data.link.href).host}`, run: () => { openUrl(detailView.data.link.href, true); finish(); } }
+			? { label: `${detailView.data.link.label || 'Open'} · ${new URL(detailView.data.link.href).host}`, run: () => openUrl(detailView.data.link.href, true) }
 			: null
 	});
 
@@ -664,6 +747,8 @@
 				layout,
 				kind,
 				loading: !!data.loading && (q.length >= 3 || !!activeFilter),
+				// Videos hold their row with three grey tiles until the first ones land.
+				skeleton: layout === 'video' && !!data.loading && (q.length >= 3 || !!activeFilter) && !results.length,
 				error: data.error || '',
 				items: [...results.slice(0, max).map((r) => {
 					const key = `r:${p.providerId}:${r.id}`;
@@ -673,6 +758,8 @@
 						title: r.title,
 						subtitle: r.subtitle,
 						thumbnail: r.thumbnail,
+						duration: r.meta?.duration,
+						info: r.meta?.info,
 						kind: r.meta?.kind,
 						color: r.meta?.color,
 						// A failed action reports here; success shows on the chip. The
@@ -682,15 +769,14 @@
 						// A movie or show the user has: the play mark on the art
 						// plays it, while a click elsewhere opens its details.
 						play: r.openLabel === 'Play' && r.href
-							? { run: () => { openUrl(r.href, true); finish(); } }
-							: p.player && r.meta?.track
-								? { run: () => playTrack(r.meta.track) }
-								: null,
+							? { run: () => openUrl(r.href, true) }
+							: playerAction(key, p, r),
 						request: resultAction(key, p, r),
 						showDetail: r.detail ? () => openDetail(key, p, r) : null,
 						tmdb: r.meta?.tmdb,
 						source: layout === 'poster' ? sourceOf(p, r) : null,
 						tags: r.tags,
+						progress: r.meta?.progress,
 						accessory: layout === 'list' ? p.integrationName : '',
 						actions: r.filter ? filterActions(key, p, r) : resultActions(key, p, r)
 					};
@@ -775,7 +861,7 @@
 		if (item.url && e && 'button' in e && (mod || e.button === 1)) {
 			noteOpen(item.key);
 			openUrl(item.url, true);
-			finish();
+			if (item.more || item.key === 'web' || item.key.startsWith('app:')) finish();
 			return;
 		}
 		const action = mod && item.actions[1] ? item.actions[1] : item.actions[0];
@@ -1030,6 +1116,23 @@
 		return () => document.body.classList.remove('search-active');
 	});
 
+	// On phones the open palette is pinned under the status bar by a lift
+	// measured from where the bar sits in the page, so the page must not
+	// scroll underneath it: a scroll carried the input up off the screen,
+	// and the lift chasing it made the scroll stutter. Fixing the body at
+	// its current offset freezes the page without a jump, and closing puts
+	// the scroll position back. The results list still scrolls on its own.
+	$effect(() => {
+		if (!inlineOpen || !window.matchMedia('(max-width: 767px)').matches) return;
+		const y = window.scrollY;
+		const s = document.body.style;
+		Object.assign(s, { position: 'fixed', top: `-${y}px`, left: '0', right: '0' });
+		return () => {
+			Object.assign(s, { position: '', top: '', left: '', right: '' });
+			window.scrollTo(0, y);
+		};
+	});
+
 	const listId = 'launcher-list';
 	const emptyText = $derived(
 		(query || '').trim().startsWith('!') && !activeScope ? 'No command or scope by that name. Type ! on its own to see them all.' : ''
@@ -1106,6 +1209,7 @@
 			{emptyText}
 			{detail}
 			ondetailclose={() => { closeDetail(); inputEl?.focus(); }}
+			ontaskcheck={checkTask}
 			onselect={(k) => { selectedKey = k; userMoved = true; }}
 			onrun={runItem}
 			onaction={(item, action) => { panelOpen = false; action.run(); }}

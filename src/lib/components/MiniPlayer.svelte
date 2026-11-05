@@ -1,19 +1,28 @@
 <script>
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { nowPlaying } from '$lib/stores/player.js';
+	import { nowPlaying, queue, shuffleAfter, playAt } from '$lib/stores/player.js';
 	import { integrations as integrationsStore } from '$lib/stores/integrations.js';
 
-	// Corner player for a song picked in search. Deliberately small: play or
-	// pause, stop, mute, and how far along it is. No seeking and no queue.
+	// Corner player for a song, album or playlist picked in search.
+	// Deliberately small: play or pause, stop, volume, and how far along it is.
+	// An album or playlist plays in turn; a playlist adds Shuffle. No seeking.
 	let audio = $state(null);
 	let paused = $state(true);
 	let muted = $state(false);
+	let volume = $state(1);
+	let volumeOpen = $state(false);
+	let wrap = $state(null);
+	// Speaker icon: 0 muted, 1 quiet, 2 loud.
+	const level = $derived(muted || volume === 0 ? 0 : volume < 0.5 ? 1 : 2);
 	let current = $state(0);
 	let length = $state(0);
 	let failed = $state(false);
 
 	const track = $derived($nowPlaying);
+	const q = $derived($queue);
+	// Shuffle needs a track after this one to shuffle and jump to.
+	const canShuffle = $derived(q?.type === 'playlist' && q.index < q.tracks.length - 1);
 	// Navidrome knows the length; the element may not (Infinity until the
 	// whole file is in, for some formats), so it's only the fallback.
 	const total = $derived(track?.duration || (Number.isFinite(length) ? length : 0));
@@ -26,7 +35,7 @@
 
 	function save() {
 		if (!track || failed || !audio) return;
-		try { sessionStorage.setItem(SAVED_KEY, JSON.stringify({ track, at: audio.currentTime || 0 })); } catch { /* private mode */ }
+		try { sessionStorage.setItem(SAVED_KEY, JSON.stringify({ track, at: audio.currentTime || 0, queue: get(queue) })); } catch { /* private mode */ }
 	}
 
 	function forget() {
@@ -45,6 +54,8 @@
 		if (!on) return forget();
 		if (get(nowPlaying)) return;
 		resumeAt = Number(saved.at) || 0;
+		const sq = saved.queue;
+		if (Array.isArray(sq?.tracks) && Number.isInteger(sq.index) && sq.tracks[sq.index]) queue.set(sq);
 		nowPlaying.set(saved.track);
 	}
 
@@ -84,11 +95,39 @@
 	}
 
 	function stop() {
+		volumeOpen = false;
 		audio?.pause();
 		audio?.removeAttribute('src');
 		audio?.load();
 		forget();
+		queue.set(null);
 		nowPlaying.set(null);
+	}
+
+	// The next track in the album or playlist; after the last, or for a
+	// single song, the player stops.
+	function next() {
+		const cur = get(queue);
+		if (!playAt(cur, (cur?.index ?? 0) + 1)) stop();
+	}
+
+	// Shuffles every track after this one and jumps to the first of the new
+	// order, so Shuffle right after Play gives a random song.
+	function shuffle() {
+		if (!canShuffle) return;
+		const shuffled = shuffleAfter(q);
+		playAt(shuffled, shuffled.index + 1);
+	}
+
+	function setVolume(v) {
+		volume = v;
+		muted = v === 0;
+	}
+
+	// The volume slider closes on a tap outside the player or on Escape.
+	function closeVolume(e) {
+		if (!volumeOpen) return;
+		if (e.type === 'keydown' ? e.key === 'Escape' : !wrap?.contains(e.target)) volumeOpen = false;
 	}
 
 	function time(s) {
@@ -98,18 +137,38 @@
 	}
 </script>
 
+<svelte:window onpointerdown={closeVolume} onkeydown={closeVolume} />
+
 <audio
 	bind:this={audio}
 	bind:paused
 	bind:muted
+	bind:volume
 	bind:currentTime={current}
 	bind:duration={length}
-	onended={stop}
+	onended={next}
 	onerror={() => { if (track) { failed = true; forget(); } }}
 	preload="none"
 ></audio>
 
+{#snippet speaker()}
+	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<path d="M11 5 6 9H3v6h3l5 4V5Z"/>
+		{#if level === 0}<path d="m22 9-6 6M16 9l6 6"/>{:else}<path d="M15.5 8.5a5 5 0 0 1 0 7"/>{#if level === 2}<path d="M18.5 5.5a9 9 0 0 1 0 13"/>{/if}{/if}
+	</svg>
+{/snippet}
+
 {#if track}
+	<div class="mini-player-wrap" bind:this={wrap}>
+	{#if volumeOpen}
+		<div class="mini-player-volume glass-card menu-surface" role="group" aria-label="Volume">
+			<span class="mini-player-volume-num">{Math.round((muted ? 0 : volume) * 100)}</span>
+			<input type="range" min="0" max="1" step="0.01" aria-label="Volume" value={muted ? 0 : volume} style="--fill: {(muted ? 0 : volume) * 100}%" oninput={(e) => setVolume(+e.currentTarget.value)} />
+			<button type="button" class="mini-player-btn" aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} onclick={() => { if (muted && volume === 0) volume = 0.5; muted = !muted; }}>
+				{@render speaker()}
+			</button>
+		</div>
+	{/if}
 	<div class="mini-player glass-card menu-surface animate-slide-up" role="region" aria-label="Now playing">
 		<div class="mini-player-art">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
@@ -125,6 +184,12 @@
 			{/if}
 		</div>
 		<div class="mini-player-buttons">
+			{#if q?.type === 'playlist'}
+				<!-- An action, not a switch: each tap reshuffles, so no pressed state. -->
+				<button type="button" class="mini-player-btn" aria-label="Shuffle" onclick={shuffle} disabled={!canShuffle}>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/></svg>
+				</button>
+			{/if}
 			<button type="button" class="mini-player-btn" aria-label={paused ? 'Play' : 'Pause'} onclick={toggle} disabled={failed}>
 				{#if paused}
 					<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
@@ -135,15 +200,13 @@
 			<button type="button" class="mini-player-btn" aria-label="Stop" onclick={stop}>
 				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
 			</button>
-			<button type="button" class="mini-player-btn" aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} onclick={() => (muted = !muted)}>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-					<path d="M11 5 6 9H3v6h3l5 4V5Z"/>
-					{#if muted}<path d="m22 9-6 6M16 9l6 6"/>{:else}<path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>{/if}
-				</svg>
+			<button type="button" class="mini-player-btn" class:is-on={volumeOpen} aria-label="Volume" aria-expanded={volumeOpen} onclick={() => (volumeOpen = !volumeOpen)}>
+				{@render speaker()}
 			</button>
 		</div>
 		<!-- How far along, display only. -->
 		<div class="mini-player-progress" aria-hidden="true"><div style="transform: scaleX({progress})"></div></div>
+	</div>
 	</div>
 {/if}
 
@@ -159,6 +222,49 @@
 		overflow: hidden;
 		box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.45);
 	}
+	.mini-player-wrap { position: relative; }
+	/* Upright pill over the Volume button: card padding 10px + half a 32px button - half the pill. */
+	.mini-player-volume {
+		position: absolute;
+		z-index: 1;
+		right: calc(10px + 16px - 22px);
+		bottom: calc(100% + 8px);
+		width: 44px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 0 6px;
+		border-radius: 999px;
+		box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.45);
+	}
+	.mini-player-volume input {
+		writing-mode: vertical-lr;
+		direction: rtl;
+		width: 4px;
+		height: 120px;
+		margin: 4px 0;
+		appearance: none;
+		border-radius: 999px;
+		background: linear-gradient(to top, var(--color-content) var(--fill), color-mix(in srgb, var(--color-content) 18%, transparent) var(--fill));
+		cursor: pointer;
+	}
+	.mini-player-volume input::-webkit-slider-thumb {
+		appearance: none;
+		width: 14px;
+		height: 14px;
+		border-radius: 999px;
+		background: var(--color-content);
+	}
+	.mini-player-volume input::-moz-range-track { background: transparent; }
+	.mini-player-volume input::-moz-range-thumb {
+		width: 14px;
+		height: 14px;
+		border: none;
+		border-radius: 999px;
+		background: var(--color-content);
+	}
+	.mini-player-volume-num { font-size: 0.7rem; color: var(--color-content-dim); font-variant-numeric: tabular-nums; }
 	.mini-player-art {
 		position: relative;
 		width: 48px;
@@ -196,6 +302,7 @@
 	.mini-player-btn:disabled { opacity: 0.4; cursor: default; }
 	.mini-player-btn:focus-visible { outline: 2px solid var(--color-content-muted); outline-offset: 1px; }
 	.mini-player-btn svg { width: 16px; height: 16px; }
+	.mini-player-btn.is-on { background: color-mix(in srgb, var(--color-content) 10%, transparent); }
 	.mini-player-progress {
 		position: absolute;
 		left: 0;

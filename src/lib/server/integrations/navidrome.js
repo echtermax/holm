@@ -1,8 +1,9 @@
 // Navidrome integration adapter (Subsonic API).
 //
 // Surfaces:
-//   - searchProviders.music — searches artists, albums and songs
-//   - widgets.player — plays a song from search in Holm, through proxy.stream
+//   - searchProviders.music — searches artists, albums, playlists and songs
+//   - widgets.player — plays a song, album or playlist from search in Holm,
+//     through proxy.stream; `queue` lists an album's or playlist's tracks
 //
 // Auth is Subsonic token auth: every call sends t = md5(password + salt) and
 // the salt. Holm takes the password once, computes the token with a random
@@ -30,7 +31,7 @@ const adapter = {
 	name: 'Navidrome',
 	icon: 'di:navidrome',
 	shortcut: 'nd',
-	description: 'Music server — search artists, albums and songs',
+	description: 'Music server — search artists, albums, playlists and songs',
 
 	configSchema: [
 		{
@@ -104,12 +105,15 @@ const adapter = {
 
 				const max = Math.min(limit || 10, 25);
 				const songs = Math.max(1, Math.floor(max * SONG_SHARE));
-				const res = await subsonic(
-					config,
-					'search3',
-					{ query: trimmed, artistCount: String(max), albumCount: String(max), songCount: String(songs) },
-					fetch
-				);
+				const [res, playlists] = await Promise.all([
+					subsonic(
+						config,
+						'search3',
+						{ query: trimmed, artistCount: String(max), albumCount: String(max), songCount: String(songs) },
+						fetch
+					),
+					matchingPlaylists(config, trimmed, fetch)
+				]);
 				if (!res.ok) {
 					throw new Error(`Navidrome search failed: ${res.status}`);
 				}
@@ -132,7 +136,16 @@ const adapter = {
 						title: a.name || a.title,
 						subtitle: ['Album', a.artist, a.year].filter(Boolean).join(' · '),
 						cover: a.coverArt,
-						href: `${base}/app/#/album/${encodeURIComponent(a.id)}/show`
+						href: `${base}/app/#/album/${encodeURIComponent(a.id)}/show`,
+						queue: { type: 'album', id: a.id }
+					})),
+					...playlists.map((p) => ({
+						id: p.id,
+						title: p.name,
+						subtitle: `Playlist · ${p.songCount} ${p.songCount === 1 ? 'song' : 'songs'}`,
+						cover: p.coverArt,
+						href: `${base}/app/#/playlist/${encodeURIComponent(p.id)}/show`,
+						queue: { type: 'playlist', id: p.id }
 					})),
 					...(found.song || []).map((s) => ({
 						id: s.id,
@@ -149,28 +162,34 @@ const adapter = {
 							item.cover && COVER_ID.test(item.cover)
 								? `/api/integrations/navidrome/proxy/cover/${encodeURIComponent(item.cover)}`
 								: undefined;
-						// A song plays in Holm's own player, through the stream proxy.
-						const track = item.song && COVER_ID.test(item.song.id)
-							? {
-								title: item.title || 'Untitled',
-								artist: item.song.artist || '',
-								duration: Number(item.song.duration) || 0,
-								stream: `/api/integrations/navidrome/proxy/stream/${encodeURIComponent(item.song.id)}`,
-								cover: thumbnail
-							}
-							: undefined;
+						// A song plays in Holm's own player, through the stream proxy;
+						// an album or playlist plays its tracks in turn, fetched on play.
+						const track = item.song ? trackFor(item.song) : null;
+						const queue = item.queue && COVER_ID.test(item.queue.id) ? item.queue : null;
 						return {
 							id: String(item.id),
 							title: item.title || 'Untitled',
 							subtitle: item.subtitle,
 							thumbnail,
 							href: item.href,
-							meta: track ? { kind: 'media', track } : { kind: 'media' }
+							meta: track ? { kind: 'media', track } : queue ? { kind: 'media', queue } : { kind: 'media' }
 						};
 					})
 				};
 			}
 		}
+	},
+
+	// An album's tracks in disc and track order, or a playlist's in its own.
+	async queue({ config, params, fetch }) {
+		const { type, id } = params || {};
+		if (!['album', 'playlist'].includes(type) || typeof id !== 'string' || !COVER_ID.test(id)) return null;
+		const res = await subsonic(config, type === 'album' ? 'getAlbum' : 'getPlaylist', { id }, fetch);
+		if (!res.ok) throw new Error(`Navidrome returned ${res.status}`);
+		const body = (await res.json())?.['subsonic-response'];
+		if (body?.status !== 'ok') throw new Error(body?.error?.message || 'Navidrome sent an unexpected reply');
+		const songs = type === 'album' ? body.album?.song : body.playlist?.entry;
+		return (songs || []).map(trackFor).filter(Boolean);
 	},
 
 	proxy: {
@@ -206,6 +225,36 @@ const adapter = {
 		player: { label: 'Player', description: 'Play songs from search in a corner player' }
 	}
 };
+
+// A song as the corner player plays it, or null without a usable id.
+function trackFor(song) {
+	if (!song?.id || !COVER_ID.test(song.id)) return null;
+	return {
+		title: song.title || 'Untitled',
+		artist: song.artist || '',
+		duration: Number(song.duration) || 0,
+		stream: `/api/integrations/navidrome/proxy/stream/${encodeURIComponent(song.id)}`,
+		cover: song.coverArt && COVER_ID.test(song.coverArt)
+			? `/api/integrations/navidrome/proxy/cover/${encodeURIComponent(song.coverArt)}`
+			: undefined
+	};
+}
+
+// The user's playlists whose name contains the query. Subsonic's search
+// skips playlists, and getPlaylists is one call for all of them. A failure
+// here leaves the rest of the search standing.
+async function matchingPlaylists(config, query, fetch) {
+	try {
+		const res = await subsonic(config, 'getPlaylists', {}, fetch);
+		if (!res.ok) return [];
+		const body = (await res.json())?.['subsonic-response'];
+		const needle = query.toLowerCase();
+		return (body?.playlists?.playlist || []).filter((p) => p.id && String(p.name || '').toLowerCase().includes(needle))
+			.map((p) => ({ ...p, songCount: Number(p.songCount) || 0 }));
+	} catch {
+		return [];
+	}
+}
 
 function stripTrailingSlash(url) {
 	return url.endsWith('/') ? url.slice(0, -1) : url;

@@ -1,4 +1,5 @@
 <script>
+	import { marked } from 'marked';
 	import AppIcon from './AppIcon.svelte';
 	import Keys from './Keys.svelte';
 
@@ -19,6 +20,7 @@
 		emptyText = '',
 		detail = null,
 		ondetailclose = () => {},
+		ontaskcheck = () => {},
 		onselect = () => {},
 		onrun = () => {},
 		onaction = () => {},
@@ -73,6 +75,13 @@
 		event: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/>',
 		model: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
 		collection: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+		// GitHub and Gitea rows: the glyph says what it is, its colour the state.
+		repo: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/>',
+		issue: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+		'issue-closed': '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+		pr: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/>',
+		'pr-merged': '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+		'pr-closed': '<circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="m21 3-6 6"/><path d="m21 9-6-6"/><path d="M18 11.5V15"/><circle cx="18" cy="18" r="3"/>',
 		tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>'
 	};
 
@@ -120,6 +129,89 @@
 		node.addEventListener('animationend', done);
 	}
 
+	// Kinds whose detail view is compact (an icon, not a poster), also while loading.
+	const COMPACT = new Set(['event', 'document', 'card']);
+
+	// A memo's Markdown or a work item's HTML, sanitized in the browser (on the
+	// server, DOMPurify runs on jsdom, which leaks per call). Links open in a
+	// new tab; images without an absolute address (Plane's own assets) go.
+	// With `checklist`, the boxes are live: a change asks `ontoggle`, the box
+	// stays as saved until the Markdown says otherwise, and `states` marks a
+	// box saving (a spinner in its place) or failed (an error with Retry).
+	function richText(node, opts) {
+		let o = opts;
+		let purify;
+		let shown;
+		const boxes = () => [...node.querySelectorAll('input[type=checkbox]')];
+		const textOf = (li) => {
+			const copy = li.cloneNode(true);
+			copy.querySelectorAll('ul, ol, .launcher-check-error').forEach((n) => n.remove());
+			return copy.textContent.trim();
+		};
+		function paint() {
+			if (!purify) return;
+			const source = o.markdown != null ? marked.parse(o.markdown, { gfm: true, breaks: true }) : o.html || '';
+			if (source !== shown) {
+				shown = source;
+				node.innerHTML = purify.sanitize(source);
+				node.querySelectorAll('a[href]').forEach((a) => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
+				node.querySelectorAll('img').forEach((img) => { if (!/^https?:\/\//.test(img.getAttribute('src') || '')) img.remove(); });
+			}
+			node.querySelectorAll('.launcher-check-spin, .launcher-check-error').forEach((n) => n.remove());
+			boxes().forEach((box, i) => {
+				const li = box.closest('li');
+				box.disabled = !o.checklist;
+				if (!li) return;
+				li.classList.remove('is-saving', 'is-error');
+				box.setAttribute('aria-label', textOf(li));
+				const st = o.states?.[i];
+				if (st === 'saving') {
+					li.classList.add('is-saving');
+					box.insertAdjacentHTML('beforebegin', '<span class="launcher-check-spin" role="status" aria-label="Saving"></span>');
+				} else if (st?.error) {
+					li.classList.add('is-error');
+					const err = document.createElement('span');
+					err.className = 'launcher-check-error';
+					err.setAttribute('role', 'alert');
+					err.textContent = `Couldn’t save. ${st.error} `;
+					const retry = document.createElement('button');
+					retry.type = 'button';
+					retry.textContent = 'Retry';
+					retry.dataset.retry = String(i);
+					err.append(retry);
+					li.append(err);
+				}
+			});
+		}
+		function onchange(e) {
+			const box = e.target;
+			const i = boxes().indexOf(box);
+			if (i < 0 || !o.checklist) return;
+			const checked = box.checked;
+			box.checked = !checked; // stays as saved until the save lands
+			o.ontoggle(i, checked, textOf(box.closest('li')));
+		}
+		function onclick(e) {
+			const retry = e.target.closest?.('[data-retry]');
+			const st = retry && o.states?.[Number(retry.dataset.retry)];
+			if (st?.error) o.ontoggle(Number(retry.dataset.retry), st.checked, st.text);
+		}
+		// Focus stays in the search input, as for every other button here.
+		const keepFocus = (e) => { if (e.target.closest?.('input, button')) e.preventDefault(); };
+		node.addEventListener('change', onchange);
+		node.addEventListener('click', onclick);
+		node.addEventListener('mousedown', keepFocus);
+		import('isomorphic-dompurify').then(({ default: DOMPurify }) => { purify = DOMPurify; paint(); });
+		return {
+			update(next) { o = next; paint(); },
+			destroy() {
+				node.removeEventListener('change', onchange);
+				node.removeEventListener('click', onclick);
+				node.removeEventListener('mousedown', keepFocus);
+			}
+		};
+	}
+
 	// Request → Requested pops once, when the request lands; a title that was
 	// already requested opens without it.
 	function landed(node, done) {
@@ -144,7 +236,7 @@
 		<div class="launcher-scroll launcher-detail" role="region" aria-label="Details for {detail.title}">
 			<!-- An event never has a backdrop, so it gets the short hero while loading
 			     too, rather than a movie-sized one that collapses when it lands. -->
-			<div class="launcher-detail-hero" class:is-empty={!detail.data?.backdrop && (!detail.loading || detail.r?.meta?.kind === 'event')}>
+			<div class="launcher-detail-hero" class:is-empty={!detail.data?.backdrop && (!detail.loading || COMPACT.has(detail.r?.meta?.kind))}>
 				{#if detail.data?.backdrop}
 					<img class="launcher-detail-backdrop is-loading" use:thumbLoading src={detail.data.backdrop} alt="" referrerpolicy="no-referrer" onerror={thumbFailed} />
 				{/if}
@@ -153,9 +245,9 @@
 					Results
 				</button>
 			</div>
-			<!-- An event is compact: its icon, then title and facts, with the buttons on the right. -->
-			<div class="launcher-detail-body" class:is-compact={!detail.thumbnail && detail.r?.meta?.kind === 'event'}>
-				<div class="launcher-detail-poster launcher-thumb-wrap" class:is-icon={!detail.thumbnail && detail.r?.meta?.kind === 'event'} style:color={detail.r?.meta?.color}>
+			<!-- An event, memo or work item is compact: its icon, then title and facts, with the buttons on the right. -->
+			<div class="launcher-detail-body" class:is-compact={!detail.thumbnail && COMPACT.has(detail.r?.meta?.kind)}>
+				<div class="launcher-detail-poster launcher-thumb-wrap" class:is-icon={!detail.thumbnail && COMPACT.has(detail.r?.meta?.kind)} style:color={detail.r?.meta?.color}>
 					{#if detail.thumbnail}
 						<img class="is-loading" use:thumbLoading src={detail.thumbnail} alt="" referrerpolicy="no-referrer" onerror={thumbFailed} />
 					{/if}
@@ -167,6 +259,7 @@
 						{#if detail.data}
 							<div class="launcher-detail-facts">
 								{#each detail.data.facts || [] as fact}<span>{fact}</span>{/each}
+								{#if detail.data.pinned}<span class="launcher-detail-pinned"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>Pinned</span>{/if}
 								{#if detail.data.rating}
 									<span class="launcher-detail-rating">
 										<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>
@@ -217,6 +310,26 @@
 			{:else if detail.error}
 				<div class="launcher-error">{detail.error}</div>
 			{:else if detail.data}
+				{#if detail.data.fields?.length}
+					<dl class="launcher-detail-fields">
+						{#each detail.data.fields as f}
+							<dt>{f.label}</dt>
+							<dd>
+								{#if f.chips}
+									{#each f.chips as c}<span class="launcher-field-chip">{#if c.color}<i style:background={c.color}></i>{/if}{#if c.initials}<b>{c.initials}</b>{/if}{c.text}</span>{/each}
+								{:else}
+									<span class="launcher-field-value" class:is-warn={f.warn}>{#if f.color}<i style:background={f.color}></i>{/if}{f.value}</span>
+								{/if}
+							</dd>
+						{/each}
+					</dl>
+				{/if}
+				{#if detail.data.markdown || detail.data.html}
+					<div
+						class="launcher-detail-md"
+						use:richText={{ markdown: detail.data.markdown ?? null, html: detail.data.html, checklist: !!detail.data.checklist, states: detail.taskStates, ontoggle: ontaskcheck }}
+					></div>
+				{/if}
 				<div class="launcher-detail-text">
 					{#if detail.data.tagline}<p class="launcher-detail-tagline">{detail.data.tagline}</p>{/if}
 					{#if detail.data.overview}<p>{#each linkParts(detail.data.overview) as part}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.href}</a>{:else}{part.text}{/if}{/each}</p>{/if}
@@ -229,7 +342,7 @@
 	{:else}
 	<div class="launcher-scroll" id={listId} role="listbox" aria-label="Results" use:enter={back && 'is-back'}>
 		{#each sections as section (section.id)}
-			{#if section.items.length || section.error}
+			{#if section.items.length || section.error || section.skeleton}
 				<div class="launcher-section" role="group" aria-labelledby="{listId}-{section.id}">
 					<div class="launcher-section-label" id="{listId}-{section.id}">
 						<span>{section.label}</span>
@@ -237,7 +350,16 @@
 					{#if section.error}
 						<div class="launcher-error">{section.error}</div>
 					{/if}
-					<div class={section.layout === 'grid' ? 'launcher-grid' : section.layout === 'poster' ? 'launcher-posters' : section.layout === 'tracks' ? 'launcher-tracks' : section.layout === 'answer' ? 'launcher-answers' : 'launcher-rows'}>
+					<div class={section.layout === 'grid' ? 'launcher-grid' : section.layout === 'poster' ? 'launcher-posters' : section.layout === 'tracks' ? 'launcher-tracks' : section.layout === 'video' ? 'launcher-videos' : section.layout === 'answer' ? 'launcher-answers' : 'launcher-rows'}>
+						{#if section.skeleton}
+							{#each [0, 1, 2] as n}
+								<div class="launcher-item is-video is-skeleton" aria-hidden="true">
+									<div class="launcher-thumb-wrap launcher-skeleton-block"></div>
+									<span class="launcher-skeleton-line"></span>
+									<span class="launcher-skeleton-line is-short"></span>
+								</div>
+							{/each}
+						{/if}
 						{#each section.items as item, i (item.key)}
 							{@const isSel = item.key === selectedKey}
 							<!-- Keyboard lives on the search input (combobox + aria-activedescendant). -->
@@ -248,7 +370,7 @@
 								aria-selected={isSel}
 								aria-label={section.layout === 'list' ? undefined : item.answer ? `${item.answer.from.value} = ${[item.answer.to, ...(item.answer.also || [])].map((r) => r.value).join(' = ')}` : [item.title, item.subtitle, item.badge].filter(Boolean).join(', ')}
 								tabindex="-1"
-								class="launcher-item {section.layout === 'grid' ? 'is-tile' : section.layout === 'poster' ? 'is-poster' : section.layout === 'tracks' ? 'is-track' : section.layout === 'answer' ? 'is-answer' : 'is-row'}"
+								class="launcher-item {section.layout === 'grid' ? 'is-tile' : section.layout === 'poster' ? 'is-poster' : section.layout === 'tracks' ? 'is-track' : section.layout === 'video' ? 'is-video' : section.layout === 'answer' ? 'is-answer' : 'is-row'}"
 								class:is-selected={isSel}
 								use:scrollIntoView={isSel}
 								use:enter={!back && 'is-rising'}
@@ -307,10 +429,24 @@
 									</div>
 									<span class="launcher-text">
 										<span class="launcher-title">{item.title}</span>
-										{#if item.subtitle}<span class="launcher-subtitle">{item.subtitle}</span>{/if}
+										<!-- An album or playlist that couldn't load says so in place of its details. -->
+										{#if item.badge}<span class="launcher-subtitle is-error">{item.badge}</span>
+										{:else if item.subtitle}<span class="launcher-subtitle">{item.subtitle}</span>{/if}
 									</span>
 								{:else if item.more && section.layout !== 'list'}
 									<div class="launcher-thumb-wrap launcher-more">{item.title}</div>
+								{:else if section.layout === 'video'}
+									<!-- Video: 16:9 thumbnail with its length, title, channel, then views and age. -->
+									<div class="launcher-thumb-wrap">
+										<svg class="launcher-thumb-fallback" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>
+										{#if item.thumbnail}
+											<img class="is-loading" use:thumbLoading src={item.thumbnail} alt="" loading="lazy" referrerpolicy="no-referrer" onerror={thumbFailed} />
+										{/if}
+										{#if item.duration}<span class="launcher-duration">{item.duration}</span>{/if}
+									</div>
+									<div class="launcher-poster-title">{item.title}</div>
+									{#if item.subtitle}<div class="launcher-poster-sub">{item.subtitle}</div>{/if}
+									{#if item.info}<div class="launcher-poster-sub">{item.info}</div>{/if}
 								{:else if section.layout === 'grid' || section.layout === 'poster'}
 									<div class="launcher-thumb-wrap">
 										{#if item.thumbnail}
@@ -376,11 +512,14 @@
 										<span class="launcher-title">{item.title}</span>
 										{#if item.subtitle}<span class="launcher-subtitle">{item.subtitle}</span>{/if}
 									</span>
+									{#if item.progress}<span class="launcher-progress" class:is-done={item.progress.done === item.progress.total}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>{item.progress.done}/{item.progress.total} done</span>{/if}
 									{#if item.tags?.length}
 										<span class="launcher-tags">
 											{#each item.tags.slice(0, 3) as tag}<span class="launcher-tag">{tag}</span>{/each}
 										</span>
 									{/if}
+									<!-- Outside .launcher-tags so it still shows on phones. -->
+									{#if item.badge}<span class="launcher-tag">{item.badge}</span>{/if}
 									{#if item.accessory}<span class="launcher-accessory">{item.accessory}</span>{/if}
 								{/if}
 							</div>

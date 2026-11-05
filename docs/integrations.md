@@ -17,7 +17,7 @@ Holm has two kinds of app support.
 | Karakeep | Bookmarks (full text); under `!b`, tags and lists to search inside | URL + API key | `!b` |
 | Linkwarden | Links by name, URL, description and tags (full text with Meilisearch) | URL + access token | `!lw` |
 | Plex | Movies, shows and music | Code at plex.tv/link, no key to copy | `!plex` |
-| Navidrome | Artists, albums and songs; optional player for songs | URL + username + password (only a derived token is kept) | `!nd` |
+| Navidrome | Artists, albums, playlists and songs; optional player for songs, albums and playlists | URL + username + password (only a derived token is kept) | `!nd` |
 | Audiobookshelf | Audiobooks and podcasts | URL + API key (before 2.26, the account's API token) | `!abs` |
 | Mealie | Recipes | URL + API token | `!r` |
 | Seerr | Movies and shows: play what's there, request what isn't | Automatic through Jellyfin or Plex; otherwise a Quick Connect code | `!sr` |
@@ -27,6 +27,11 @@ Holm has two kinds of app support.
 | Kavita | Manga, comics and book series | URL + Auth Key (Kavita 0.8.9 or later) | `!kavita` |
 | Papra | Documents, by name and content | URL + read-only API token + organization ID | `!papra` |
 | Thingport | 3D models; under `!tp`, collections and tags too; "More" opens Thingport's results page | URL + API token | `!tp` |
+| Memos | The user's own memos (full text), with tags, date and checklist progress; a memo opens in full, and its checklist boxes tick from Holm | URL + access token (Memos 0.26 or later, 26.10's `/api` included) | `!memo` |
+| Plane | Work items, by title or ID (`WEB-42`), across the workspace's projects; a work item opens with its state, priority, assignees, labels, due date and description | URL + workspace + API key (Plane 1.1 or later) | `!plane` |
+| GitHub | The user's repos (name, description), plus issues and PRs they're involved in, as one short section; under `!gh`, Issues, Pull requests and Repositories sections. Issues are searched once typing pauses, since GitHub allows 30 searches a minute | Read-only fine-grained token. A token covers one owner's repos (the user or one org) plus all public repos, so private repos of other owners don't show | `!gh` |
+| Gitea | Repos, issues and PRs the token can see (title, name, description), as one short section; under `!gt`, Issues, Pull requests and Repositories sections | URL + read-only access token (Read on repository, issue and user) | `!gt` |
+| Invidious | YouTube videos, in a row of 16:9 tiles under the posters; Enter opens the video on the Invidious server | Nothing: shared, set by the operator | `!yt` |
 
 Integrations are marked Alpha in the UI. The widgets so far are Navidrome's player and the Calendar's reminders and upcoming events.
 
@@ -49,7 +54,28 @@ integrations:
 
 The key (`immich`) must match the adapter id. If an app in `apps:` has the same `id`, the integration uses that app's icon. A block without `enabled` counts as enabled.
 
+Each user's **Search provider** switch on an integration's card keeps it out of plain search; its `!` shortcut (`!gh`, `!gt`, …) still searches it.
+
 **Set `default_url` for every integration.** The server then uses that URL for every user, whatever the browser sends, including for connections saved before it was set. Without it, users may enter any `http:` or `https:` URL, and Holm, not the browser, makes the requests, so it can reach hosts inside your network; Holm logs a warning at startup for each integration without one. An app's `groups:` don't apply to its integration: every enabled integration is listed to every signed-in user.
+
+**Invidious is shared.** It searches YouTube through one Invidious server for everyone, with no account, so there is nothing for users to connect: Settings shows it as "Set by your admin" and Connected, with no connect form; its ⋯ menu has only **Settings**, which opens the Search provider switch so each user can leave YouTube out of their search. It stays hidden until `default_url` is set:
+
+```yaml
+integrations:
+  invidious:
+    default_url: "https://invidious.example.com"
+    open_url: "https://www.youtube.com"   # optional
+    region: "GB"                          # optional
+    language: "en"                        # optional
+```
+
+Videos open on the Invidious server, unless `open_url` is set. Then a video opens at `<open_url>/watch?v=<id>`, and "More" opens that site's results page, while search and thumbnails still go through Invidious.
+
+`region` is a two-letter country code (`US`, `GB`, …) that Holm sends with every search, so YouTube answers for that country. Without it YouTube goes by where the Invidious server is. Anything other than two letters is ignored.
+
+`language` (`en`, `de`, `pt-BR`, …) sets the language of view counts and dates ("28M views · 1 week ago"). Without it they come in the Invidious server's default language, which on a public server can be anything. Holm sends it as `hl`; anything that isn't a language code is ignored.
+
+Public Invidious servers come and go, and many turn their API off or answer with a browser check, which Holm reports as "Couldn’t reach <host>". Check that `<default_url>/api/v1/search?q=test&type=video` returns JSON, or run your own.
 
 ## Connecting (users)
 
@@ -65,7 +91,7 @@ Seerr needs no sign-in of its own for users who connected Jellyfin or Plex: Holm
 
 When results come from more than one of Jellyfin, Plex and Seerr, their movies and shows share one **Movies & TV** row, each title once: titles the user has first, then those they can request, then those already requested. Albums and artists stay in their own Jellyfin or Plex row. Music, from Navidrome or that row, shows as compact cards, three to a row on a wide window and two on a narrower one: a small cover on the left, the name on top and the details under it. Seerr results show each title once: if it's on the media server, it opens there (**Play**), and Jellyfin or Plex results for the same title are folded into it. When Jellyfin or Plex returned the title itself, its link is used and Seerr's status is ignored. Each poster has the icon of the app it opens in on its top-right corner, in the icon style picked for the apps: Jellyfin or Plex for a title the user has, Seerr for one they don't. Movies and shows the user has carry a play mark on the poster that plays them in Jellyfin or Plex. For a title that isn't there, hovering the poster shows a **Request** chip along its bottom that files the request in Seerr as that user; it spins while the request is filed and then stays as a disabled **Requested** with a clock, as it does for any title Seerr already has a request for. A show that's only partly there can still be requested from its Seerr result, and the request asks for just the missing seasons; when Jellyfin or Plex also returned the show, its result is the one shown and has no **Request**. Users whose Seerr account can't request (or can't request that kind of title) see no **Request** at all. Clicking anywhere else on a movie or show poster, from Seerr, Jellyfin or Plex, opens a detail view in the search panel (backdrop, year, runtime, rating, genres, overview, cast) with **Play on Jellyfin** or **Plex**, or **Request** and **Open in Seerr**; it never requests on its own. → opens it for the selected poster, and ← or Esc goes back to the results. While the row is still loading with nothing to show yet, it shows placeholder posters.
 
-Navidrome has the first widget, a **Player**. The operator allows it with `surfaces: { widgets: true }` under `navidrome`, and each user turns it on with the **Player** switch on their Navidrome card; it starts off. With it off, a song opens its album in Navidrome like any other result. With it on, a song plays in Holm itself: clicking it, or Enter, starts it in a small player in the bottom-right corner (above the search bar on a phone) with the cover, title, artist, time played and length, and play/pause, stop and mute. Reloading the page brings the song back where it was, paused, with one tap to carry on (browsers don't let a page start sound on its own before it's been clicked); this is per tab, and **Stop** clears it. There's no seeking or queue; picking another song replaces the one playing, and **Open in Navidrome** (⌘↵, or ⌘-click) still opens the album. The audio comes through Holm's proxy with the user's own token, as the original file, so the browser has to support its format (MP3, AAC, FLAC and Ogg play everywhere; ALAC only in Safari).
+Navidrome has the first widget, a **Player**. The operator allows it with `surfaces: { widgets: true }` under `navidrome`, and each user turns it on with the **Player** switch on their Navidrome card; it starts off. Search also finds the user's playlists whose name contains the query, shown as `Playlist · 42 songs`. With it off, a song opens its album in Navidrome like any other result. With it on, a song, album or playlist plays in Holm itself: clicking it, or Enter, starts it in a small player in the bottom-right corner (above the search bar on a phone) with the cover, title, artist, time played and length, and play/pause, stop and mute. Reloading the page brings the song back where it was, paused, with one tap to carry on (browsers don't let a page start sound on its own before it's been clicked); this is per tab, and **Stop** clears it. An album plays in track order and a playlist in its own order, moving to the next track on their own and stopping after the last; **Stop** ends the whole album or playlist. While a playlist plays the player adds **Shuffle**, between play/pause and stop: it shuffles every track after the current one and jumps straight to the first of the new order, so tapping it right after starting a playlist gives a random song. It's an action, not a switch, so each tap reshuffles. There's no seeking or skip; picking another song, album or playlist replaces what's playing, and **Open in Navidrome** (⌘↵, or ⌘-click) still opens it. If an album or playlist can't be loaded, its card says why in place of its details. The audio comes through Holm's proxy with the user's own token, as the original file, so the browser has to support its format (MP3, AAC, FLAC and Ogg play everywhere; ALAC only in Safari).
 
 The Calendar works with any CalDAV server: Nextcloud, Radicale, Baïkal, Stalwart, Fastmail, iCloud and others. The user gives the address their calendar app uses (for Nextcloud, `https://<host>/remote.php/dav`; a server root or a single calendar's URL works too), a username and an app password. Holm finds every calendar that holds events and skips task lists. Search matches event titles from 30 days back to a year ahead, upcoming events first, with recurring events listed once per occurrence; picking one opens the **Calendar web address**, under **Advanced** on the card. That is optional: for Nextcloud, iCloud and Fastmail Holm knows the calendar page, and anywhere else without one (Stalwart has no web calendar) picking an event shows its details: time, place and notes (its links clickable), a **Join call** button when the event has a video call link, with a chip naming the service (Stalwart, Nextcloud, iCloud, Fastmail) when Holm can tell it from the URL. Google Calendar has no app passwords for CalDAV, so it needs a sign-in of its own and isn't supported yet. The app password is stored encrypted like any other key. Holm follows the server's redirects only to the same origin or the same host over https, plus, for iCloud, to the account's own `pNN-caldav.icloud.com`, so the password never goes anywhere else. Changing the web address keeps the app password; changing the CalDAV URL to another server asks for it again. Recurring events rely on the server expanding them (CalDAV's `expand`), as Nextcloud, Radicale, Baïkal, Stalwart and Fastmail do (iCloud is untested); on a server that doesn't, a series shows up nowhere rather than only its first occurrence. Stalwart leaves the reminders out of the occurrences it expands, so for events that come back without one, Holm reads the stored event and gives each occurrence its reminders.
 
@@ -148,6 +174,8 @@ An integration is one file plus one import line. The settings form, API routes a
    		label: 'Tags',
    		mode: 'inline',
    		scoped: true,            // asked only under !m, never in an everyday search
+   		                         // (plainOnly: true is the opposite: an everyday
+   		                         // summary that !m swaps for the full sections)
    		async query({ config, query }) {
    			return { results: [{ id, title: '#recipes', href, filter: { label: '#recipes', params: { tag: 'recipes' } }, meta: { kind: 'tag' } }] };
    		}

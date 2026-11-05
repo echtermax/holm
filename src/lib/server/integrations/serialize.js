@@ -35,7 +35,7 @@ export function adapterToClient(adapter, { icon, name, tip, shortcut } = {}) {
 		searchProviders: Object.fromEntries(
 			Object.entries(adapter.searchProviders || {}).map(([key, p]) => [
 				key,
-				{ label: p.label, mode: p.mode, kind: p.kind || null, layout: p.layout || null, shelf: p.shelf || null, scoped: !!p.scoped, filters: !!p.filters }
+				{ label: p.label, mode: p.mode, kind: p.kind || null, layout: p.layout || null, shelf: p.shelf || null, scoped: !!p.scoped, plainOnly: !!p.plainOnly, filters: !!p.filters, delay: p.delay || 0 }
 			])
 		),
 		widgets: Object.entries(adapter.widgets || {}).map(([key, w]) => ({
@@ -44,6 +44,9 @@ export function adapterToClient(adapter, { icon, name, tip, shortcut } = {}) {
 			description: w.description || ''
 		})),
 		widgetsOnConnect: !!adapter.widgetsOnConnect,
+		// Shared integrations have nothing for the user to connect: Settings
+		// shows this line, and their ⋯ menu opens only the Use for switches.
+		operatorNote: adapter.shared ? 'Set by your admin' : null,
 		multiAccount: !!adapter.multiAccount
 	};
 }
