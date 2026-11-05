@@ -89,6 +89,17 @@ test('region goes to YouTube as a two-letter code; without one, or a bad one, no
 	assert.equal(new URL(calls[0]).searchParams.get('region'), 'GB');
 });
 
+test('language goes to Invidious as hl; without one, or a bad one, nothing is sent', async () => {
+	const hlOf = async (language) => {
+		const { fetch, calls } = fakeFetch(videos);
+		await invidious.searchProviders.videos.query({ config: { ...config, language }, query: 'interstellar', limit: 24, fetch });
+		return new URL(calls[0]).searchParams.get('hl');
+	};
+	assert.equal(await hlOf('en'), 'en');
+	assert.equal(await hlOf('pt-BR'), 'pt-BR');
+	for (const bad of [undefined, '', 'e', 'english', 'en&x=1']) assert.equal(await hlOf(bad), null);
+});
+
 test('a bot-check page or an error status counts as down', async () => {
 	const html = fakeFetch('<!doctype html><title>Verifying your browser…</title>', { headers: { 'content-type': 'text/html' } });
 	await assert.rejects(search(html.fetch));
