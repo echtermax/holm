@@ -14,6 +14,7 @@ to the version and date.
 - **New:** Set each theme's page colour, like true black, in `config.yml`. ([#126](https://github.com/man15h/holm/pull/126))
 - **New:** Play Navidrome albums and playlists in the corner player. ([#126](https://github.com/man15h/holm/pull/126))
 - **New:** Shuffle the rest of a playlist from the corner player. ([#126](https://github.com/man15h/holm/pull/126))
+- **New:** Set the corner player's volume with a slider. ([#126](https://github.com/man15h/holm/pull/126))
 
 ## 0.11.0 — 2026-10-25
 
