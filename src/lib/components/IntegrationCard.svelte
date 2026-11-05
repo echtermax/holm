@@ -317,7 +317,9 @@
 		<AppIcon {icon} name={integration.name} size="w-3.5 h-3.5" wrapSize="w-5 h-5" {iconStyle} wrap />
 		<div class="flex-1 min-w-0">
 			<span class="text-[0.8rem] text-content font-medium">{integration.name}</span>
-			{#if signedInAs && !expanded}
+			{#if integration.operatorNote}
+				<span class="block text-[0.7rem] text-content-dim truncate">{integration.operatorNote}</span>
+			{:else if signedInAs && !expanded}
 				<span class="block text-[0.7rem] text-content-dim truncate">Signed in as {signedInAs}</span>
 			{:else if linkNote && (expanded || !connected)}
 				<span class="block text-[0.7rem] text-content-dim truncate">{linkNote}</span>
@@ -355,6 +357,13 @@
 						<!-- Solid, not glass: inside the Configure modal's own backdrop blur
 						     a second blur doesn't apply, so a glass menu shows the rows under it. -->
 						<div class="absolute right-0 {menuUp ? 'bottom-full mb-1' : 'top-full mt-1'} bg-surface-modal border border-border-card rounded-lg shadow-theme z-50 min-w-[140px] py-1">
+							{#if integration.operatorNote}
+							<!-- Shared (Invidious): nothing to connect, so Settings only opens Use for. -->
+							<button
+								class="w-full px-3 py-1.5 text-left text-[0.75rem] text-content-muted bg-transparent border-none cursor-pointer hover:bg-surface-card-hover transition-colors"
+								onclick={editConnection}
+							>Settings</button>
+							{:else}
 							<button
 								class="w-full px-3 py-1.5 text-left text-[0.75rem] text-content-muted bg-transparent border-none cursor-pointer hover:bg-surface-card-hover transition-colors"
 								onclick={editConnection}
@@ -363,6 +372,7 @@
 								class="w-full px-3 py-1.5 text-left text-[0.75rem] text-red-400/80 bg-transparent border-none cursor-pointer hover:bg-surface-card-hover transition-colors"
 								onclick={runDisconnect}
 							>Disconnect</button>
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -520,7 +530,9 @@
 					{/if}
 				</div>
 			{/snippet}
-			{#if connected && integration.multiAccount}
+			{#if integration.operatorNote}
+				<!-- Shared: no connect form, only Use for below. -->
+			{:else if connected && integration.multiAccount}
 				<IntegrationAccounts {integration} main={mainForm} />
 			{:else}
 				{@render mainForm()}
@@ -528,7 +540,7 @@
 
 			<!-- Surface toggles -->
 			{#if connected}
-				<div class="space-y-2 pt-2 border-t border-border-card">
+				<div class="space-y-2 {integration.operatorNote ? '' : 'pt-2 border-t border-border-card'}">
 					<div class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-content-dim">Use for</div>
 					{#if hasSearch}
 						<button

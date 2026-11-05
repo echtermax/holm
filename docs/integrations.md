@@ -29,6 +29,7 @@ Holm has two kinds of app support.
 | Thingport | 3D models; under `!tp`, collections and tags too; "More" opens Thingport's results page | URL + API token | `!tp` |
 | Memos | The user's own memos (full text), with tags and date | URL + access token (Memos 0.26 or later) | `!memo` |
 | Plane | Work items, by title or ID (`WEB-42`), across the workspace's projects | URL + workspace + API key (Plane 1.1 or later) | `!plane` |
+| Invidious | YouTube videos, in a row of 16:9 tiles under the posters; Enter opens the video on the Invidious server | Nothing: shared, set by the operator | `!yt` |
 
 Integrations are marked Alpha in the UI. The widgets so far are Navidrome's player and the Calendar's reminders and upcoming events.
 
@@ -52,6 +53,19 @@ integrations:
 The key (`immich`) must match the adapter id. If an app in `apps:` has the same `id`, the integration uses that app's icon. A block without `enabled` counts as enabled.
 
 **Set `default_url` for every integration.** The server then uses that URL for every user, whatever the browser sends, including for connections saved before it was set. Without it, users may enter any `http:` or `https:` URL, and Holm, not the browser, makes the requests, so it can reach hosts inside your network; Holm logs a warning at startup for each integration without one. An app's `groups:` don't apply to its integration: every enabled integration is listed to every signed-in user.
+
+**Invidious is shared.** It searches YouTube through one Invidious server for everyone, with no account, so there is nothing for users to connect: Settings shows it as "Set by your admin" and Connected, with no connect form; its ⋯ menu has only **Settings**, which opens the Search provider switch so each user can leave YouTube out of their search. It stays hidden until `default_url` is set:
+
+```yaml
+integrations:
+  invidious:
+    default_url: "https://invidious.example.com"
+    open_url: "https://www.youtube.com"   # optional
+```
+
+Videos open on the Invidious server, unless `open_url` is set. Then a video opens at `<open_url>/watch?v=<id>`, and "More" opens that site's results page, while search and thumbnails still go through Invidious.
+
+Public Invidious servers come and go, and many turn their API off or answer with a browser check, which Holm reports as "Couldn’t reach <host>". Check that `<default_url>/api/v1/search?q=test&type=video` returns JSON, or run your own.
 
 ## Connecting (users)
 

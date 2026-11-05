@@ -30,10 +30,16 @@ test('parseChangelog: releases newest first, with dates and notes', () => {
 	]);
 });
 
-test('the repo CHANGELOG.md has the package version', () => {
+// On dev, a version raised for its alphas has no section yet: its lines wait
+// under "## Unreleased" until the release PR renames it.
+test('the repo CHANGELOG.md has the package version, or an Unreleased section', () => {
 	const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-	const found = parseChangelog(readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8'));
-	assert.ok(found.some((r) => r.version === version), `CHANGELOG.md has no ## ${version} section`);
+	const md = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+	const found = parseChangelog(md);
+	assert.ok(
+		found.some((r) => r.version === version) || /^## Unreleased\s*$/m.test(md),
+		`CHANGELOG.md has no ## ${version} or ## Unreleased section`
+	);
 });
 
 test('compareVersions: numeric, not by text', () => {

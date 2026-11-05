@@ -82,7 +82,8 @@ export async function POST({ cookies, url, request, fetch }) {
 		return json({ results: result?.results || [], more: result?.more || null });
 	} catch (err) {
 		const status = err?.name === 'TimeoutError' ? 504 : 502;
-		return json({ error: `Search failed: ${describeFetchError(err, SEARCH_TIMEOUT_MS)}` }, { status });
+		const message = searchProvider.failMessage?.(conn.config) || `Search failed: ${describeFetchError(err, SEARCH_TIMEOUT_MS)}`;
+		return json({ error: message }, { status });
 	} finally {
 		clearTimeout(timer);
 	}

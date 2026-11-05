@@ -1667,7 +1667,7 @@ body.search-active .launcher-host { z-index: 40; }
 }
 
 /* Photo grid and poster rows */
-.launcher-grid, .launcher-posters {
+.launcher-grid, .launcher-posters, .launcher-videos {
 	display: flex;
 	gap: 8px;
 	/* Room for the selection ring, which the scroll box would clip. */
@@ -1678,6 +1678,22 @@ body.search-active .launcher-host { z-index: 40; }
 .launcher-item.is-tile { flex: 0 0 auto; width: 96px; }
 .launcher-item.is-poster { flex: 0 0 auto; width: 116px; }
 .launcher-posters { gap: 14px; padding-bottom: 12px; }
+.launcher-item.is-video { flex: 0 0 auto; width: 208px; }
+.launcher-videos { gap: 14px; padding-bottom: 12px; }
+.is-video .launcher-thumb-wrap { aspect-ratio: 16 / 9; }
+.launcher-duration {
+	position: absolute; right: 6px; bottom: 6px;
+	padding: 1px 5px; border-radius: 5px;
+	background: rgba(9, 9, 11, 0.82); color: #fafafa;
+	font-size: 0.64rem; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.launcher-skeleton-block {
+	background: linear-gradient(100deg, var(--hero-search-chip-bg) 20%, var(--hero-search-chip-border) 50%, var(--hero-search-chip-bg) 80%);
+	background-size: 200% 100%;
+	animation: thumb-shimmer 1.2s linear infinite;
+}
+.is-skeleton .launcher-skeleton-line { display: block; }
+.is-skeleton { cursor: default; }
 .launcher-thumb-wrap {
 	position: relative;
 	border-radius: 9px;

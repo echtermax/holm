@@ -28,8 +28,16 @@ export async function PUT({ cookies, url, request, params, fetch }) {
 	const body = await readJson(request);
 	if (!body) return json({ error: 'Invalid JSON' }, { status: 400 });
 
-	const submitted = body.config || {};
 	const existing = await getConnection(user.username, adapter.id);
+	// A shared integration (Invidious) saves only the switches: there is
+	// nothing to connect, and its config is the operator's.
+	if (adapter.shared) {
+		const surfaces = sanitizeSurfaces(body.surfaces);
+		await upsertConnection(user.username, adapter.id, { surfaces });
+		return json({ ok: true, userState: { connected: true, config: redactConfig(adapter, existing.config), surfaces } });
+	}
+
+	const submitted = body.config || {};
 	const stored = existing?.config || {};
 	const operator = getOperatorDefaults(adapter.id);
 	let checked = checkUrls(adapter, operator, mergeConfig(adapter, stored, submitted));
