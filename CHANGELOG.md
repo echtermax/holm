@@ -8,13 +8,9 @@ twelve words, ending with a link to its PR. Each pull request into `dev` adds
 its line under `## Unreleased`; the release pull request renames that heading
 to the version and date.
 
-## Unreleased
-
-- **Fixed:** YouTube view counts and dates follow a set `language`, not the server's. ([#130](https://github.com/man15h/holm/pull/130))
-
 ## 0.12.0 — 2026-11-05
 
-- **New:** Invidious integration: search YouTube with `!yt` through a self-hosted or external Invidious server. ([#125](https://github.com/man15h/holm/pull/125), [#129](https://github.com/man15h/holm/pull/129))
+- **New:** Invidious integration: search YouTube with `!yt` through a self-hosted or external Invidious server. ([#125](https://github.com/man15h/holm/pull/125), [#129](https://github.com/man15h/holm/pull/129), [#130](https://github.com/man15h/holm/pull/130))
 - **New:** Search GitHub and Gitea repos, issues and PRs; `!gh` and `!gt` split them into sections. ([#123](https://github.com/man15h/holm/pull/123))
 - **New:** Search Memos and Plane, open results in place, tick memo checklists. ([#122](https://github.com/man15h/holm/pull/122), [#127](https://github.com/man15h/holm/pull/127))
 - **New:** Play Navidrome albums and playlists in the corner player, with Shuffle. ([#126](https://github.com/man15h/holm/pull/126))
