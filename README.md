@@ -10,7 +10,7 @@ Most self-hosted dashboards are built by one admin, for one admin. Holm is for t
 
 - **Multi-user from the start.** Every person has their own layout, theme and bookmarks, stored server-side and synced across devices. You curate the catalog; they pick from it.
 - **Uses the login you already have.** OIDC with Authelia, Authentik, Keycloak, Zitadel or any provider. Give an app `groups:` and only those groups see it.
-- **A launcher, not just a grid.** Type anywhere (or `⌘K` / `Ctrl+K`) to find apps, run commands, and search inside Immich, Paperless, Nextcloud, Jellyfin, Plex, Navidrome, Audiobookshelf, Mealie, Seerr, Planka, Karakeep, Linkwarden, Miniflux, Komga, Kavita, Papra, Thingport, Memos, Plane, GitHub and any CalDAV calendar, each with the user's own login, plus YouTube through an Invidious server you choose.
+- **A launcher, not just a grid.** Type anywhere (or `⌘K` / `Ctrl+K`) to find apps, run commands, and search inside Immich, Paperless, Nextcloud, Jellyfin, Plex, Navidrome, Audiobookshelf, Mealie, Seerr, Planka, Karakeep, Linkwarden, Miniflux, Komga, Kavita, Papra, Thingport, Memos, Plane, GitHub, Gitea and any CalDAV calendar, each with the user's own login, plus YouTube through an Invidious server you choose.
 - **Onboarding for non-technical people.** Welcome slides and per-app setup guides with App Store / Play links.
 - **One YAML file.** No admin UI to keep in sync. Apps, branding and most settings reload on save; OIDC, database and key settings need a restart.
 - **Small and private.** A single container (amd64 / arm64) with built-in SQLite, so there's no separate database to run. No telemetry. A few features reach public services; [what leaves the box](#what-leaves-the-box) lists them.
@@ -125,7 +125,8 @@ What Holm deliberately leaves out: server stats, container health, uptime widget
 | Thingport | 3D models; under `!tp`, collections and tags too |
 | Memos | Your own memos, opened in full with live checklists (Memos 0.26 or later) |
 | Plane | Work items, by title or ID, opened with state, assignees and description |
-| GitHub | Your repos, plus issues and PRs you're involved in (one owner's repos per token, plus public ones) |
+| GitHub | Your repos, plus issues and PRs you're involved in (one owner's repos per token, plus public ones); under `!gh`, repos, issues and PRs in sections of their own |
+| Gitea | Repos, issues and PRs on your Gitea server; under `!gt`, in sections of their own |
 | Invidious | YouTube videos, from the Invidious server set in `config.yml`; no sign-in |
 
 **App health** is a health check built into each app tile, supporting Kener, Uptime Kuma, Gatus and Cachet, or a plain URL check; see [App health](docs/configuration.md#app-health).

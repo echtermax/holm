@@ -31,8 +31,9 @@ import invidious from './invidious.js';
 import memos from './memos.js';
 import plane from './plane.js';
 import github from './github.js';
+import gitea from './gitea.js';
 
-const KNOWN_ADAPTERS = [immich, paperless, nextcloud, planka, karakeep, linkwarden, jellyfin, plex, navidrome, audiobookshelf, mealie, seerr, caldav, miniflux, komga, kavita, papra, thingport, invidious, memos, plane, github];
+const KNOWN_ADAPTERS = [immich, paperless, nextcloud, planka, karakeep, linkwarden, jellyfin, plex, navidrome, audiobookshelf, mealie, seerr, caldav, miniflux, komga, kavita, papra, thingport, invidious, memos, plane, github, gitea];
 const BY_ID = new Map(KNOWN_ADAPTERS.map((a) => [a.id, a]));
 
 function resolveApp(id) {

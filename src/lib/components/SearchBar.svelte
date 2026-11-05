@@ -99,6 +99,7 @@
 					layout: prov.layout,
 					shelf: prov.shelf,
 					scoped: prov.scoped,
+					plainOnly: prov.plainOnly,
 					filters: prov.filters,
 					delay: prov.delay,
 					// Navidrome's player widget: songs play in Holm instead of opening.
