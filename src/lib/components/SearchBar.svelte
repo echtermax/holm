@@ -762,9 +762,12 @@
 						info: r.meta?.info,
 						kind: r.meta?.kind,
 						color: r.meta?.color,
-						// A failed action reports here; success shows on the chip. The
-						// play mark already says "Available", so that badge is dropped.
+						// An action reports here: failures on every row, and on plain
+						// list rows (which have no chip) the whole story — what ran,
+						// and whether it landed. The play mark already says
+						// "Available", so that badge is dropped.
 						badge: (actionState[key]?.ok === false && actionState[key].message)
+							|| (layout !== 'poster' && (actionState[key]?.busy || actionState[key]?.ok === true) && actionState[key].message ? actionState[key].message : '')
 							|| (r.openLabel === 'Play' && r.meta?.status === 'Available' ? '' : r.meta?.status) || '',
 						// A movie or show the user has: the play mark on the art
 						// plays it, while a click elsewhere opens its details.

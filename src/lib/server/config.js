@@ -2,7 +2,8 @@ import { readFileSync, statSync, watchFile } from 'fs';
 import { resolve, dirname } from 'path';
 import yaml from 'js-yaml';
 import { marked } from 'marked';
-import { version as APP_VERSION } from '../../../package.json';
+import pkg from '../../../package.json' with { type: 'json' };
+const APP_VERSION = pkg.version;
 import { getBrandColor } from './brandColors.js';
 import { canSeeApp, canSeeSection, sectionsFor } from './appAccess.js';
 import { latestRelease, updateFor } from './updateCheck.js';
@@ -18,10 +19,13 @@ let _config = null;
 // Watch config file for changes and invalidate cache
 const configPath = process.env.CONFIG_PATH || 'config.yml';
 try {
-	watchFile(configPath, { interval: 2000 }, () => {
+	const watcher = watchFile(configPath, { interval: 2000 }, () => {
 		console.log('[holm] Config file changed, reloading on next request');
 		_config = null;
 	});
+	// The server's own listeners keep the process alive; the watcher must not.
+	// Unref'd, it still fires while anything runs, and a test process exits.
+	watcher.unref?.();
 } catch { /* file may not exist yet */ }
 
 // Fails closed: a missing, unreadable or invalid config throws, so Holm

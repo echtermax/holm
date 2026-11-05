@@ -446,6 +446,7 @@ Every key Holm reads. "Reload" means a save takes effect without a restart.
 | `integrations.<id>.default_url` | URL | none | yes | Pins the server URL for every user. Set it for every integration |
 | `integrations.<id>.surfaces.search` / `widgets` | bool | `true` / `false` | yes | Widgets so far: Navidrome's player, the Calendar's reminders and upcoming events |
 | `integrations.planka.cache_ttl` | seconds | `300` | yes | How long Planka cards are cached per user |
+| `integrations.vikunja.cache_ttl` | seconds | `300` | yes | How long the Inbox and project names are cached per user |
 | `wallpapers.enabled` | bool | `false` | yes | Wallpaper picker and daily rotation |
 | `wallpapers.path` | absolute path | none | yes | A mounted folder of jpg/png/webp/avif images, sorted by name. Not with `url`. See [Wallpapers](#wallpapers) |
 | `wallpapers.url` | URL with `{id}` | none | yes | An http(s) image URL pattern; needs `count`. Not with `path` |

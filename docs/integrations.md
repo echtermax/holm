@@ -32,6 +32,7 @@ Holm has two kinds of app support.
 | GitHub | The user's repos (name, description), plus issues and PRs they're involved in, as one short section; under `!gh`, Issues, Pull requests and Repositories sections. Issues are searched once typing pauses, since GitHub allows 30 searches a minute | Read-only fine-grained token. A token covers one owner's repos (the user or one org) plus all public repos, so private repos of other owners don't show | `!gh` |
 | Gitea | Repos, issues and PRs the token can see (title, name, description), as one short section; under `!gt`, Issues, Pull requests and Repositories sections | URL + read-only access token (Read on repository, issue and user) | `!gt` |
 | Invidious | YouTube videos, in a row of 16:9 tiles under the posters; Enter opens the video on the Invidious server | Nothing: shared, set by the operator | `!yt` |
+| Vikunja | Tasks, by title, across every project, open ones first; under `!vk`, the typed text creates a new task in the user's Inbox; a task opens with its project, due date, priority, labels and assignees | URL + API token (Settings → API tokens; read for search, write to add). Inbox and project names are cached 5 minutes per user, `cache_ttl` | `!vk` |
 
 Integrations are marked Alpha in the UI. The widgets so far are Navidrome's player and the Calendar's reminders and upcoming events.
 

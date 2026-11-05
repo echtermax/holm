@@ -193,7 +193,7 @@ search:
 # Pluggable third-party app adapters. Shipped adapters: Immich, Paperless,
 # Nextcloud, Planka, Karakeep, Linkwarden, Jellyfin, Plex, Navidrome,
 # Audiobookshelf, Mealie, Seerr, Calendar (CalDAV), Miniflux, Komga, Kavita,
-# Papra, Thingport, Memos, Plane, GitHub, Gitea. Add more in
+# Papra, Thingport, Memos, Plane, GitHub, Gitea, Vikunja. Add more in
 # src/lib/server/integrations/.
 #
 # Each key must match the adapter's `id`. If an app in the section above has
@@ -384,6 +384,14 @@ integrations:
     enabled: true
     name: "Gitea"
     default_url: "https://gitea.example.com"
+    surfaces:
+      search: true
+      widgets: false
+  vikunja:
+    enabled: true
+    name: "Vikunja"
+    default_url: "https://vikunja.example.com"
+    # cache_ttl: 300                            # Seconds the Inbox and project names are cached per user (default 300)
     surfaces:
       search: true
       widgets: false
